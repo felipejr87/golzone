@@ -17,7 +17,7 @@ export default function AdminLogin() {
     setErro('')
 
     setTimeout(() => {
-      if (email === ADMIN_EMAIL && senha === ADMIN_SENHA) {
+      if (email.trim().toLowerCase() === ADMIN_EMAIL && senha.trim() === ADMIN_SENHA) {
         localStorage.setItem('divino_admin', '1')
         navigate('/admin')
       } else {
@@ -48,9 +48,11 @@ export default function AdminLogin() {
             {loading ? 'Entrando...' : 'Entrar →'}
           </button>
         </form>
-        <p className="text-center text-gray-600 text-xs mt-5">
-          admin@divinotv.com · divino2026
-        </p>
+        <div className="mt-5 bg-white/5 rounded-xl p-3 text-center">
+          <p className="text-gray-500 text-xs mb-1">Credenciais de acesso:</p>
+          <p className="text-gray-300 text-xs font-mono">admin@divinotv.com</p>
+          <p className="text-gray-300 text-xs font-mono">divino2026</p>
+        </div>
       </div>
     </div>
   )
