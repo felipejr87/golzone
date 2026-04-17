@@ -22,7 +22,7 @@ export default function AdminLogin() {
       <div className="bg-[#111811] border border-white/10 rounded-2xl p-8 w-full max-w-sm">
         <div className="text-center mb-6">
           <img src="/logo.jpg" alt="Divino TV" className="w-12 h-12 rounded-full object-cover mx-auto mb-3"/>
-          <div className="text-2xl font-black text-white">GolZone Admin</div>
+          <div className="text-2xl font-black text-white">DivinoAPP Admin</div>
           <div className="text-gray-400 text-sm mt-1">Painel Divino TV</div>
         </div>
         <form onSubmit={login} className="space-y-3">
