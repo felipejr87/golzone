@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
+import { MOCK_DATA } from '../../lib/mockData'
+
+const hasLive = MOCK_DATA.matches.some(m => m.status === 'em_andamento')
 
 export function Header() {
-  const loc = useLocation()
+  const loc     = useLocation()
   const isAdmin = loc.pathname.startsWith('/admin')
 
   return (
@@ -22,33 +23,18 @@ export function Header() {
         )}
 
         <div className="ml-auto flex items-center gap-3">
-          <LiveIndicator />
+          {hasLive && (
+            <Link to="/"
+              className="flex items-center gap-1.5 bg-red-500/20 border border-red-500/40 px-2.5 py-1 rounded-full badge-live">
+              <span className="w-1.5 h-1.5 bg-red-500 rounded-full inline-block" />
+              <span className="text-red-400 text-xs font-bold">AO VIVO</span>
+            </Link>
+          )}
           {!isAdmin && (
             <Link to="/admin" className="text-xs text-gray-600 hover:text-gray-400 transition">Admin</Link>
           )}
         </div>
       </div>
     </header>
-  )
-}
-
-function LiveIndicator() {
-  const [hasLive, setHasLive] = useState(false)
-
-  useEffect(() => {
-    supabase.from('matches')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'em_andamento')
-      .then(({ count }) => setHasLive((count || 0) > 0))
-  }, [])
-
-  if (!hasLive) return null
-
-  return (
-    <Link to="/"
-      className="flex items-center gap-1.5 bg-red-500/20 border border-red-500/40 px-2.5 py-1 rounded-full badge-live">
-      <span className="w-1.5 h-1.5 bg-red-500 rounded-full inline-block" />
-      <span className="text-red-400 text-xs font-bold">AO VIVO</span>
-    </Link>
   )
 }

@@ -1,18 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
 import { MOCK_DATA } from '../lib/mockData'
-
-type AwardItem = {
-  id: number
-  tipo: string
-  referencia: string
-  player_nome?: string
-  time_nome?: string
-  championship_nome?: string
-  player?: { id?: number; nome: string; apelido?: string; foto_url?: string | null }
-  team?:   { nome: string; escudo_url?: string | null }
-}
 
 const TIPOS = [
   { key: 'melhor_jogo', label: 'Melhor do Jogo', icon: '⭐', cor: '#F5B800' },
@@ -23,31 +11,7 @@ const TIPOS = [
 ]
 
 export default function Destaques() {
-  const [awards, setAwards]   = useState<AwardItem[]>([])
   const [periodo, setPeriodo] = useState<'semana' | 'mes' | 'ano'>('mes')
-
-  useEffect(() => {
-    supabase.from('awards').select(`
-      id, tipo, referencia,
-      player:players(id,nome,apelido,foto_url),
-      team:teams(nome,escudo_url)
-    `).order('criado_em', { ascending: false }).limit(50)
-      .then(({ data }) => {
-        if (data && data.length > 0) {
-          setAwards(data as unknown as AwardItem[])
-        } else {
-          setAwards(MOCK_DATA.premiacoes.map(p => ({
-            id:                p.id,
-            tipo:              p.tipo,
-            referencia:        p.referencia,
-            player_nome:       p.player_nome,
-            time_nome:         p.time_nome,
-            championship_nome: p.championship_nome,
-          })))
-        }
-      })
-  }, [])
-
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
@@ -69,7 +33,7 @@ export default function Destaques() {
       </div>
 
       {TIPOS.map(tipo => {
-        const lista = awards.filter(a => a.tipo === tipo.key)
+        const lista = MOCK_DATA.premiacoes.filter(a => a.tipo === tipo.key)
         if (!lista.length) return null
         return (
           <section key={tipo.key} className="mb-8">
@@ -86,30 +50,25 @@ export default function Destaques() {
         )
       })}
 
-      {awards.length === 0 && (
+      {MOCK_DATA.premiacoes.length === 0 && (
         <p className="text-gray-600 text-sm text-center py-16">Nenhuma premiação registrada ainda.</p>
       )}
     </div>
   )
 }
 
-function AwardCard({ award, cor }: { award: AwardItem; cor: string }) {
-  const playerNome = award.player?.apelido || award.player?.nome || award.player_nome || '—'
-  const timeNome   = award.team?.nome || award.time_nome || ''
-  const href = award.player?.id ? `/p/${award.player.id}` : '#'
+type AwardItem = typeof MOCK_DATA.premiacoes[number]
 
+function AwardCard({ award, cor }: { award: AwardItem; cor: string }) {
   return (
-    <Link to={href}
+    <Link to="#"
       className="flex items-center gap-4 p-4 bg-[#0E0F15] rounded-2xl card-hover">
       <div className="w-14 h-14 rounded-full overflow-hidden bg-white/5 flex-shrink-0 flex items-center justify-center text-2xl">
-        {award.player?.foto_url
-          ? <img src={award.player.foto_url} className="w-full h-full object-cover" />
-          : '👤'
-        }
+        👤
       </div>
       <div className="flex-1 min-w-0">
-        <div className="font-bold text-white truncate">{playerNome}</div>
-        {timeNome && <div className="text-xs text-gray-500 mt-0.5">{timeNome}</div>}
+        <div className="font-bold text-white truncate">{award.player_nome}</div>
+        {award.time_nome && <div className="text-xs text-gray-500 mt-0.5">{award.time_nome}</div>}
         <div className="text-xs mt-1" style={{ color: cor }}>{award.referencia}</div>
       </div>
     </Link>

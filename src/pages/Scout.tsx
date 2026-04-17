@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
 import { MOCK_DATA } from '../lib/mockData'
 
 type JogadorStat = {
@@ -8,60 +7,28 @@ type JogadorStat = {
   nome: string
   apelido: string
   posicao: string
-  foto_url: string | null
   nota_media: string
   jogos: number
   gols_total: number
   melhor_jogo_count: number
 }
 
+const allStats: JogadorStat[] = MOCK_DATA.jogadores.map((j, i) => ({
+  id:   j.id,
+  nome: j.nome,
+  apelido: j.apelido,
+  posicao: j.posicao,
+  nota_media: (9.5 - i * 0.4).toFixed(1),
+  jogos:             2,
+  gols_total:        i < 2 ? 2 : 0,
+  melhor_jogo_count: i === 0 ? 1 : 0,
+}))
+
 export default function Scout() {
-  const [jogadores, setJogadores] = useState<JogadorStat[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [posicao, setPosicao]     = useState('')
-  const [minNota, setMinNota]     = useState(0)
+  const [posicao, setPosicao] = useState('')
+  const [minNota, setMinNota] = useState(0)
 
-  useEffect(() => {
-    async function carregar() {
-      try {
-        const { data } = await supabase.from('players').select(`
-          id, nome, apelido, posicao, foto_url,
-          notas:match_ratings(nota, melhor_jogo),
-          gols:match_goals(id)
-        `)
-
-        if (data && data.length > 0) {
-          const stats: JogadorStat[] = (data as any[])
-            .map(p => ({
-              id:   p.id,
-              nome: p.nome ?? '',
-              apelido: p.apelido ?? '',
-              posicao: p.posicao ?? '',
-              foto_url: p.foto_url ?? null,
-              nota_media: p.notas?.length
-                ? (p.notas.reduce((s: number, n: any) => s + Number(n.nota), 0) / p.notas.length).toFixed(1)
-                : '0.0',
-              jogos:             p.notas?.length ?? 0,
-              gols_total:        p.gols?.length  ?? 0,
-              melhor_jogo_count: p.notas?.filter((n: any) => n.melhor_jogo).length ?? 0,
-            }))
-            .filter(p => Number(p.nota_media) > 0)
-            .sort((a, b) => Number(b.nota_media) - Number(a.nota_media))
-
-          setJogadores(stats)
-        } else {
-          setJogadores(mockStats())
-        }
-      } catch {
-        setJogadores(mockStats())
-      } finally {
-        setLoading(false)
-      }
-    }
-    carregar()
-  }, [])
-
-  const filtered = jogadores.filter(j =>
+  const filtered = allStats.filter(j =>
     (!posicao || j.posicao === posicao) && Number(j.nota_media) >= minNota
   )
 
@@ -99,24 +66,16 @@ export default function Scout() {
         </select>
       </div>
 
-      {loading ? (
-        <div className="space-y-3">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-20 bg-[#0E0F15] rounded-2xl animate-pulse" />
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {filtered.length === 0 && (
-            <p className="text-gray-600 text-sm text-center py-10">
-              Nenhum jogador encontrado com esses filtros.
-            </p>
-          )}
-          {filtered.map((j, idx) => (
-            <ScoutCard key={j.id} jogador={j} rank={idx + 1} />
-          ))}
-        </div>
-      )}
+      <div className="space-y-3">
+        {filtered.length === 0 && (
+          <p className="text-gray-600 text-sm text-center py-10">
+            Nenhum jogador encontrado com esses filtros.
+          </p>
+        )}
+        {filtered.map((j, idx) => (
+          <ScoutCard key={j.id} jogador={j} rank={idx + 1} />
+        ))}
+      </div>
     </div>
   )
 }
@@ -133,10 +92,7 @@ function ScoutCard({ jogador, rank }: { jogador: JogadorStat; rank: number }) {
         {rank}
       </div>
       <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center flex-shrink-0 overflow-hidden">
-        {jogador.foto_url
-          ? <img src={jogador.foto_url} className="w-full h-full object-cover" />
-          : <span className="text-2xl">👤</span>
-        }
+        <span className="text-2xl">👤</span>
       </div>
       <div className="flex-1 min-w-0">
         <div className="font-bold text-white truncate">{jogador.apelido || jogador.nome}</div>
@@ -168,18 +124,4 @@ function ScoutCard({ jogador, rank }: { jogador: JogadorStat; rank: number }) {
       </div>
     </Link>
   )
-}
-
-function mockStats(): JogadorStat[] {
-  return MOCK_DATA.jogadores.map((j, i) => ({
-    id:   j.id,
-    nome: j.nome,
-    apelido: j.apelido,
-    posicao: j.posicao,
-    foto_url: null,
-    nota_media: (9.5 - i * 0.4).toFixed(1),
-    jogos:             2,
-    gols_total:        i < 2 ? 2 : 0,
-    melhor_jogo_count: i === 0 ? 1 : 0,
-  }))
 }

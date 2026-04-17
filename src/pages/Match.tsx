@@ -1,45 +1,25 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
 import { MOCK_DATA } from '../lib/mockData'
 
 export default function Match() {
   const { id } = useParams()
-  const [match, setMatch] = useState<any>(null)
   const [aba, setAba] = useState<'narracao' | 'notas' | 'sumula'>('narracao')
 
-  useEffect(() => {
-    supabase.from('matches').select(`
-      *, championship:championships(nome,categoria,temporada),
-      mandante:teams!mandante_id(id,nome,escudo_url),
-      visitante:teams!visitante_id(id,nome,escudo_url),
-      resultado:match_results(*),
-      gols:match_goals(*, team:teams(nome)),
-      cartoes:match_cards(*, team:teams(nome)),
-      notas:match_ratings(*, player:players(id,nome,apelido,foto_url)),
-      sumula:match_reports(*)
-    `).eq('id', id).single()
-      .then(({ data }) => {
-        if (data) {
-          setMatch(data)
-        } else {
-          const mock = MOCK_DATA.matches.find(m => m.id === Number(id))
-          if (mock) setMatch(mock)
-        }
-      })
-  }, [id])
+  const match = MOCK_DATA.matches.find(m => m.id === Number(id))
 
   if (!match) return (
-    <div className="flex items-center justify-center h-64 text-gray-600">
-      <span className="animate-spin text-3xl mr-3">⚽</span>
-      <span className="text-sm">Carregando jogo...</span>
+    <div className="p-8 text-gray-500 text-center">
+      <div className="text-4xl mb-3">⚽</div>
+      <p>Jogo não encontrado.</p>
+      <Link to="/" className="text-[#E8232A] text-sm mt-3 inline-block hover:underline">← Voltar ao início</Link>
     </div>
   )
 
-  const melhor = match.notas?.find((n: any) => n.melhor_jogo)
-  const notasOrd = [...(match.notas || [])].sort((a: any, b: any) => b.nota - a.nota)
-  const gols = match.gols || []
-  const cartoes = match.cartoes || []
+  const melhor  = match.notas?.find(n => n.melhor_jogo)
+  const notasOrd = [...(match.notas || [])].sort((a, b) => b.nota - a.nota)
+  const gols     = match.gols || []
+  const cartoes  = match.cartoes || []
 
   const tabs: { key: typeof aba; label: string }[] = [
     { key: 'narracao', label: '📢 Narração' },
@@ -110,7 +90,7 @@ export default function Match() {
           <span className="text-3xl">🏆</span>
           <div className="flex-1">
             <div className="text-xs text-yellow-400 font-bold uppercase tracking-wider">Melhor do Jogo</div>
-            <div className="font-bold text-white text-lg">{melhor.player?.apelido || melhor.player?.nome || melhor.player_nome}</div>
+            <div className="font-bold text-white text-lg">{melhor.player?.nome}</div>
           </div>
           <div className="text-right">
             <div className="font-display text-4xl text-yellow-400">{melhor.nota}</div>
@@ -142,7 +122,7 @@ export default function Match() {
               <div>
                 <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Gols</h3>
                 <div className="space-y-2">
-                  {gols.map((g: any) => (
+                  {gols.map(g => (
                     <div key={g.id} className="flex items-center gap-3 p-3 bg-[#0E0F15] rounded-xl">
                       <span className="text-[#00D68F] font-bold text-sm w-10 flex-shrink-0">
                         {g.minuto ? `${g.minuto}'` : '—'}
@@ -167,7 +147,7 @@ export default function Match() {
               <div>
                 <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Cartões</h3>
                 <div className="space-y-2">
-                  {cartoes.map((c: any) => (
+                  {cartoes.map(c => (
                     <div key={c.id} className="flex items-center gap-3 p-3 bg-[#0E0F15] rounded-xl">
                       <span className="text-sm w-10 flex-shrink-0 text-gray-600">
                         {c.minuto ? `${c.minuto}'` : '—'}
@@ -201,7 +181,7 @@ export default function Match() {
               <p className="text-gray-600 text-sm text-center py-10">Notas ainda não disponíveis.</p>
             )}
             <div className="space-y-2">
-              {notasOrd.map((n: any, i: number) => (
+              {notasOrd.map((n, i) => (
                 <PlayerRatingRow key={i} nota={n} />
               ))}
             </div>
@@ -240,14 +220,11 @@ export default function Match() {
   )
 }
 
-function MatchTeam({ team }: { team: any }) {
+function MatchTeam({ team }: { team: { id: number; nome: string } | null }) {
   return (
     <div className="flex flex-col items-center gap-2 flex-1 min-w-0">
       <div className="w-16 h-16 md:w-20 md:h-20 bg-white/5 rounded-full flex items-center justify-center text-3xl">
-        {team?.escudo_url
-          ? <img src={team.escudo_url} className="w-full h-full object-contain rounded-full" />
-          : '⚽'
-        }
+        ⚽
       </div>
       <span className="font-bold text-white text-center text-sm md:text-base leading-tight max-w-[120px]">
         {team?.nome ?? '—'}
@@ -268,21 +245,16 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-function PlayerRatingRow({ nota }: { nota: any }) {
-  const n = Number(nota.nota)
+function PlayerRatingRow({ nota }: { nota: { nota: number; melhor_jogo: boolean; player: { nome: string } } }) {
+  const n   = Number(nota.nota)
   const cor = n >= 8 ? '#00D68F' : n >= 6 ? '#F5B800' : '#E8232A'
   return (
     <div className={`flex items-center gap-3 p-3 bg-[#0E0F15] rounded-xl ${nota.melhor_jogo ? 'border border-yellow-500/30' : ''}`}>
       <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-lg flex-shrink-0">
-        {nota.player?.foto_url
-          ? <img src={nota.player.foto_url} className="w-10 h-10 rounded-full object-cover" />
-          : '👤'
-        }
+        👤
       </div>
       <div className="flex-1 min-w-0">
-        <div className="font-bold text-white text-sm truncate">
-          {nota.player?.apelido || nota.player?.nome || nota.player_nome}
-        </div>
+        <div className="font-bold text-white text-sm truncate">{nota.player?.nome}</div>
         {nota.melhor_jogo && <div className="text-xs text-yellow-400">⭐ Melhor do jogo</div>}
       </div>
       <div className="w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold text-sm flex-shrink-0"

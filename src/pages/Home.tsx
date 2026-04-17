@@ -1,84 +1,15 @@
-import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
 import { MOCK_DATA } from '../lib/mockData'
 
-type MatchItem = {
-  id: number
-  status: string
-  rodada: number
-  data_hora: string | null
-  local?: string | null
-  link_video?: string | null
-  championship_id: number
-  mandante_id: number
-  visitante_id: number
-  mandante: { id: number; nome: string } | null
-  visitante: { id: number; nome: string } | null
-  championship: { nome: string } | null
-  resultado: { gols_mandante: number; gols_visitante: number } | null
-}
+const hero       = MOCK_DATA.matches.find(m => m.status === 'em_andamento')
+               ?? MOCK_DATA.matches.find(m => m.status === 'agendado')
+               ?? MOCK_DATA.matches[0]
+const campeonatos = MOCK_DATA.campeonatos
+const proximos    = MOCK_DATA.matches.filter(m => m.status === 'agendado').slice(0, 3)
+const resultados  = [...MOCK_DATA.matches.filter(m => m.status === 'finalizado')].reverse().slice(0, 4)
+const artilharia  = MOCK_DATA.artilharia
 
 export default function Home() {
-  const [hero, setHero]             = useState<MatchItem | null>(null)
-  const [campeonatos, setCampeonatos] = useState<typeof MOCK_DATA.campeonatos>([])
-  const [proximos, setProximos]     = useState<MatchItem[]>([])
-  const [resultados, setResultados] = useState<MatchItem[]>([])
-  const [artilharia, setArtilharia] = useState<typeof MOCK_DATA.artilharia>([])
-
-  useEffect(() => {
-    async function load() {
-      try {
-        const [liveRes, campsRes, nextRes, resultsRes] = await Promise.all([
-          supabase.from('matches').select(`
-            id, status, rodada, data_hora, local, link_video, championship_id, mandante_id, visitante_id,
-            mandante:teams!mandante_id(id,nome),
-            visitante:teams!visitante_id(id,nome),
-            championship:championships(nome),
-            resultado:match_results(gols_mandante,gols_visitante)
-          `).eq('status', 'em_andamento').limit(1),
-          supabase.from('championships').select('*').eq('status', 'ativo'),
-          supabase.from('matches').select(`
-            id, status, rodada, data_hora, local, link_video, championship_id, mandante_id, visitante_id,
-            mandante:teams!mandante_id(id,nome),
-            visitante:teams!visitante_id(id,nome),
-            championship:championships(nome),
-            resultado:match_results(gols_mandante,gols_visitante)
-          `).eq('status', 'agendado').gte('data_hora', new Date().toISOString())
-            .order('data_hora').limit(4),
-          supabase.from('matches').select(`
-            id, status, rodada, data_hora, local, link_video, championship_id, mandante_id, visitante_id,
-            mandante:teams!mandante_id(id,nome),
-            visitante:teams!visitante_id(id,nome),
-            championship:championships(nome),
-            resultado:match_results(gols_mandante,gols_visitante)
-          `).eq('status', 'finalizado').order('id', { ascending: false }).limit(4),
-        ])
-
-        const liveMatch = liveRes.data?.[0] ?? null
-        if (liveMatch) {
-          setHero(liveMatch as unknown as MatchItem)
-        } else if (nextRes.data?.[0]) {
-          setHero(nextRes.data[0] as unknown as MatchItem)
-        } else {
-          setHero(MOCK_DATA.matches[4] as unknown as MatchItem)
-        }
-
-        setCampeonatos(campsRes.data?.length ? campsRes.data as typeof MOCK_DATA.campeonatos : MOCK_DATA.campeonatos)
-        setProximos(nextRes.data?.length ? nextRes.data as unknown as MatchItem[] : MOCK_DATA.matches.filter(m => m.status === 'agendado').slice(0, 2) as unknown as MatchItem[])
-        setResultados(resultsRes.data?.length ? resultsRes.data as unknown as MatchItem[] : MOCK_DATA.matches.filter(m => m.status === 'finalizado').slice(0, 4) as unknown as MatchItem[])
-        setArtilharia(MOCK_DATA.artilharia)
-      } catch {
-        setHero(MOCK_DATA.matches[4] as unknown as MatchItem)
-        setCampeonatos(MOCK_DATA.campeonatos)
-        setProximos(MOCK_DATA.matches.filter(m => m.status === 'agendado').slice(0, 2) as unknown as MatchItem[])
-        setResultados(MOCK_DATA.matches.filter(m => m.status === 'finalizado').slice(0, 4) as unknown as MatchItem[])
-        setArtilharia(MOCK_DATA.artilharia)
-      }
-    }
-    load()
-  }, [])
-
   const isLive = hero?.status === 'em_andamento'
 
   return (
