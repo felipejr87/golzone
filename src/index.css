@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap');
+
+body {
+  background: #060608;
+  color: white;
+  font-family: 'Inter', sans-serif;
+  margin: 0;
+}
+
+.font-display { font-family: 'Bebas Neue', sans-serif; }
+
+.glow-red {
+  box-shadow: 0 0 20px rgba(232,35,42,0.3), 0 0 60px rgba(232,35,42,0.1);
+}
+
+.card-hover {
+  border: 1px solid rgba(255,255,255,0.06);
+  transition: all 0.2s ease;
+}
+.card-hover:hover {
+  border-color: rgba(232,35,42,0.4);
+  box-shadow: 0 4px 24px rgba(232,35,42,0.1);
+  transform: translateY(-1px);
+}
+
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.badge-live { animation: pulse-live 1.5s infinite; }
+
+.text-gradient {
+  background: linear-gradient(135deg, #E8232A, #F5B800);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: #0E0F15; }
+::-webkit-scrollbar-thumb { background: #E8232A; border-radius: 2px; }
