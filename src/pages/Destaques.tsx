@@ -13,6 +13,8 @@ const TIPOS = [
 export default function Destaques() {
   const [periodo, setPeriodo] = useState<'semana' | 'mes' | 'ano'>('mes')
 
+  const premiacoesFiltradas = MOCK_DATA.premiacoes.filter(p => p.periodo === periodo)
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
 
@@ -33,7 +35,7 @@ export default function Destaques() {
       </div>
 
       {TIPOS.map(tipo => {
-        const lista = MOCK_DATA.premiacoes.filter(a => a.tipo === tipo.key)
+        const lista = premiacoesFiltradas.filter(a => a.tipo === tipo.key)
         if (!lista.length) return null
         return (
           <section key={tipo.key} className="mb-8">
@@ -50,8 +52,8 @@ export default function Destaques() {
         )
       })}
 
-      {MOCK_DATA.premiacoes.length === 0 && (
-        <p className="text-gray-600 text-sm text-center py-16">Nenhuma premiação registrada ainda.</p>
+      {premiacoesFiltradas.length === 0 && (
+        <p className="text-gray-600 text-sm text-center py-16">Nenhuma premiação neste período.</p>
       )}
     </div>
   )

@@ -223,10 +223,24 @@ export const MOCK_DATA = {
   ],
 
   premiacoes: [
-    { id:1, tipo:'melhor_jogo', referencia:'Rodada 1 - Copa DTV', player_nome:'Carlão',        time_nome:'Flamengo Várzea',  championship_nome:'Copa Divino TV 2026' },
-    { id:2, tipo:'melhor_jogo', referencia:'Rodada 2 - Jogo 2',  player_nome:'Mateus',         time_nome:'Palmeiras Jovem',  championship_nome:'Copa Divino TV 2026' },
-    { id:3, tipo:'melhor_mes',  referencia:'Março 2026',          player_nome:'Carlão',         time_nome:'Flamengo Várzea',  championship_nome:'Copa Divino TV 2026' },
-    { id:4, tipo:'melhor_jogo', referencia:'Rodada 1 - Sub-20',   player_nome:'Gabriel Costa',  time_nome:'EC Mauá FC',       championship_nome:'Liga Sub-20 ABC 2026' },
+    // ── Semana ──────────────────────────────────────────────────────────
+    { id:1,  periodo:'semana', tipo:'melhor_jogo', referencia:'Rodada 3 · Copa DTV',    player_nome:'Mateus',        time_nome:'Palmeiras Jovem',  championship_nome:'Copa Divino TV 2026'   },
+    { id:2,  periodo:'semana', tipo:'artilheiro',  referencia:'Semana 15/abr',           player_nome:'Carlão',        time_nome:'Flamengo Várzea',  championship_nome:'Copa Divino TV 2026'   },
+    // ── Mês ─────────────────────────────────────────────────────────────
+    { id:3,  periodo:'mes',    tipo:'melhor_jogo', referencia:'Rodada 1 · Copa DTV',    player_nome:'Carlão',        time_nome:'Flamengo Várzea',  championship_nome:'Copa Divino TV 2026'   },
+    { id:4,  periodo:'mes',    tipo:'melhor_jogo', referencia:'Rodada 2 · Copa DTV',    player_nome:'Mateus',        time_nome:'Palmeiras Jovem',  championship_nome:'Copa Divino TV 2026'   },
+    { id:5,  periodo:'mes',    tipo:'melhor_jogo', referencia:'Rodada 1 · Sub-20',      player_nome:'Gabriel Costa', time_nome:'EC Mauá FC',       championship_nome:'Liga Sub-20 ABC 2026' },
+    { id:6,  periodo:'mes',    tipo:'melhor_mes',  referencia:'Abril 2026',              player_nome:'Carlão',        time_nome:'Flamengo Várzea',  championship_nome:'Copa Divino TV 2026'   },
+    { id:7,  periodo:'mes',    tipo:'artilheiro',  referencia:'Abril 2026',              player_nome:'Carlão',        time_nome:'Flamengo Várzea',  championship_nome:'Copa Divino TV 2026'   },
+    { id:8,  periodo:'mes',    tipo:'fair_play',   referencia:'Abril 2026',              player_nome:'Gabriel Costa', time_nome:'EC Mauá FC',       championship_nome:'Liga Sub-20 ABC 2026' },
+    // ── Ano ─────────────────────────────────────────────────────────────
+    { id:9,  periodo:'ano',    tipo:'melhor_jogo', referencia:'Rodada 1 · Copa DTV',    player_nome:'Carlão',        time_nome:'Flamengo Várzea',  championship_nome:'Copa Divino TV 2026'   },
+    { id:10, periodo:'ano',    tipo:'melhor_jogo', referencia:'Rodada 1 · Sub-20',      player_nome:'Gabriel Costa', time_nome:'EC Mauá FC',       championship_nome:'Liga Sub-20 ABC 2026' },
+    { id:11, periodo:'ano',    tipo:'melhor_mes',  referencia:'Março 2026',              player_nome:'Diegão',        time_nome:'Corinthians Base', championship_nome:'Copa Divino TV 2026'   },
+    { id:12, periodo:'ano',    tipo:'melhor_mes',  referencia:'Abril 2026',              player_nome:'Carlão',        time_nome:'Flamengo Várzea',  championship_nome:'Copa Divino TV 2026'   },
+    { id:13, periodo:'ano',    tipo:'melhor_ano',  referencia:'2025',                    player_nome:'Mateus',        time_nome:'Palmeiras Jovem',  championship_nome:'Copa Divino TV 2026'   },
+    { id:14, periodo:'ano',    tipo:'artilheiro',  referencia:'2026',                    player_nome:'Carlão',        time_nome:'Flamengo Várzea',  championship_nome:'Copa Divino TV 2026'   },
+    { id:15, periodo:'ano',    tipo:'fair_play',   referencia:'2026',                    player_nome:'Gabriel Costa', time_nome:'EC Mauá FC',       championship_nome:'Liga Sub-20 ABC 2026' },
   ]
 }
 

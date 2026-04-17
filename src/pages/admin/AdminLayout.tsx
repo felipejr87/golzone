@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
 
 const NAV = [
   { to:'/admin', label:'📊 Dashboard' },
@@ -10,26 +9,25 @@ const NAV = [
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const navigate = useNavigate()
-  const location = useLocation()
+  const navigate  = useNavigate()
+  const location  = useLocation()
   const [ok, setOk] = useState(false)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) navigate('/admin/login')
-      else setOk(true)
-    })
+    if (localStorage.getItem('divino_admin') === '1') setOk(true)
+    else navigate('/admin/login')
   }, [])
 
-  if (!ok) return (
-    <div className="flex items-center justify-center h-64 text-gray-400">
-      <span className="animate-spin text-2xl mr-2">⚽</span> Verificando acesso...
-    </div>
-  )
+  if (!ok) return null
 
   function isAtivo(path: string) {
     if (path === '/admin') return location.pathname === '/admin'
     return location.pathname.startsWith(path)
+  }
+
+  function sair() {
+    localStorage.removeItem('divino_admin')
+    navigate('/admin/login')
   }
 
   return (
@@ -52,8 +50,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </nav>
         <div className="border-t border-white/10 pt-4 space-y-2">
           <Link to="/" target="_blank" className="block text-xs text-gray-500 hover:text-gray-300 transition">↗ Ver site público</Link>
-          <button onClick={() => supabase.auth.signOut().then(() => navigate('/admin/login'))}
-            className="text-red-400 text-xs hover:text-red-300 transition">Sair</button>
+          <button onClick={sair} className="text-red-400 text-xs hover:text-red-300 transition">Sair</button>
         </div>
       </aside>
 
