@@ -1,499 +1,832 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { MOCK_DATA, mockJogadoresPorTime } from '../../lib/mockData'
 
-type Aba = 'transmissao' | 'elenco' | 'escalacao'
+// ─── TIPOS ────────────────────────────────────────────────
+type Status = 'pre' | 'primeiro' | 'intervalo' | 'segundo' | 'encerrado'
+type Aba = 'narrar' | 'elencos' | 'prejogo' | 'pontuacao'
 
-const APELIDOS: Record<string, string[]> = {
+interface Evento {
+  minuto: number
+  tipo: 'gol'|'amarelo'|'vermelho'|'substituicao'|'intervalo'|'acrescimo'|'inicio'|'fim'|'info'
+  texto: string
+  teamId?: number
+}
+
+interface PontuacaoJogador {
+  jogador: any
+  gols: number
+  assistencias: number
+  defesas: number
+  amarelo: boolean
+  vermelho: boolean
+  nota: number | null
+  melhorJogo: boolean
+}
+
+// ─── CONSTANTES ────────────────────────────────────────────
+const APELIDOS_POSITIVOS: Record<string, string[]> = {
   goleiro: [
-    'Mão de Boneca de Pano (não segurou nada)',
-    'Proctologista (operou milagres lá atrás)',
-    'Porta Aberta (não tinha chave pra fechar)',
-    'Detetive Vegano (não pegou nada)',
-    'WiFi Fraco (caiu na hora que precisava)',
+    'Mão de Aço (não deixou passar)',
+    'Muralha Invencível (absoluto sob as traves)',
+    'Gato Elétrico (reflexos sobrenaturais)',
+    'O Intocável (ninguém passou por ele)',
+    'Borracha Humana (se esticou em tudo)',
+    'Guarda-Chuva (cobriu tudo hoje)',
   ],
   zagueiro: [
-    'IML (só atua no corpo)',
-    'Sopa de Gesso (duro como pedra)',
-    'Anita (não deixa passar ninguém)',
-    'Gessinho (engessado mas presente)',
-    'Muralha da China (intransponível hoje)',
+    'Anita (não deixou passar absolutamente ninguém)',
+    'Muralha da China (intransponível)',
+    'Sopa de Gesso (duro na queda)',
+    'Blindagem Total (cobriu tudo)',
+    'O Guardião (defendeu o território com garra)',
+    'Rocha Viva (inabalável)',
   ],
   lateral: [
-    'Cão Castrado (não cruzou mais)',
-    'Cheque sem Fundo (prometeu e não entregou)',
-    'Ricardinho Feliz (foi lá e voltou)',
-    'Trem Bala (quando atacou, atacou)',
-    'Bicuda (chute na trave e chute na certa)',
+    'Bicuda (cruzamento na medida)',
+    'Foguete pela Lateral (velocidade impressionante)',
+    'Linha de Trem (foi e voltou o jogo inteiro)',
+    'Ricardinho Feliz (subiu e voltou com estilo)',
+    'Corredor Infinito (incansável)',
   ],
   volante: [
-    'Caçamba (só jogou pra trás)',
-    'Mertiolate (não machuca mas incomoda)',
     'Aspirador de Pó (roubou tudo no meio)',
-    'Tam Gretti (viajou mas chegou)',
-    'Segurança de Boate (não deixou entrar)',
+    'Segurança VIP (não deixou entrar)',
+    'Mertiolate (tá em tudo e não machuca)',
+    'Tam Gretti (viajou muito mas entregou)',
+    'Central de Distribuição (jogou simples e bem)',
   ],
   meia: [
+    'GPS do Campo (sempre no lugar certo)',
     'Vitamina C (presente mesmo quando ninguém viu)',
-    'Soldado de Guerra (lutou até o fim)',
-    'GPS (sempre no lugar certo)',
-    'Twitter do Presidente (falou, não fez, mas animou)',
-    'Camisinha (às vezes necessário)',
+    'Soldado de Guerra (lutou cada centímetro)',
+    'Fio Condutor (ligou tudo)',
+    'Maestro (ditou o ritmo)',
   ],
   atacante: [
-    'Foguete (quando acelerou, não tinha quem parasse)',
-    'Raio Laser (mira que impressionou)',
-    'Vitamina C (presente mesmo quando ninguém viu)',
+    'Foguete (quando acelerou não tinha quem parasse)',
+    'Laser (mira que surpreendeu)',
     'Ninja (sumiu e apareceu na hora certa)',
-    'Soldado de Guerra (coração maior que o campo)',
+    'Coração Maior que o Campo (deu tudo)',
+    'Vitamina C (presente quando o time precisou)',
+    'Soldado de Ouro (correu pelo time inteiro)',
   ],
 }
 
-function apelidoAleatorio(posicao: string) {
-  const lista = APELIDOS[posicao] || APELIDOS['atacante']
+function apelidoAleatorio(posicao: string): string {
+  const lista = APELIDOS_POSITIVOS[posicao] || APELIDOS_POSITIVOS['atacante']
   return lista[Math.floor(Math.random() * lista.length)]
 }
 
+const COR_EVENTO: Record<string, string> = {
+  gol:          'bg-green-500/10 border-green-500/20 text-green-300',
+  amarelo:      'bg-yellow-500/10 border-yellow-500/20 text-yellow-300',
+  vermelho:     'bg-red-500/10 border-red-500/20 text-red-300',
+  substituicao: 'bg-blue-500/10 border-blue-500/20 text-blue-300',
+  intervalo:    'bg-white/5 border-white/10 text-gray-400',
+  inicio:       'bg-white/5 border-white/10 text-gray-300',
+  fim:          'bg-white/5 border-white/10 text-gray-300',
+  info:         'bg-white/5 border-white/10 text-gray-500',
+  acrescimo:    'bg-white/5 border-white/10 text-gray-400',
+}
+
+// ─── COMPONENTE PRINCIPAL ──────────────────────────────────
 export default function AdminTransmissao() {
   const { id: paramId } = useParams()
-  const aoVivo = MOCK_DATA.matches.filter(m => m.status === 'em_andamento')
+
+  const aoVivo    = MOCK_DATA.matches.filter(m => m.status === 'em_andamento')
   const agendados = MOCK_DATA.matches.filter(m => m.status === 'agendado')
-  const todos = [...aoVivo, ...agendados]
+  const todos     = [...aoVivo, ...agendados]
 
   const [jogoId, setJogoId] = useState<number>(
-    paramId ? Number(paramId) : (aoVivo[0]?.id || todos[0]?.id || 0)
+    paramId ? Number(paramId) : (todos[0]?.id || 0)
   )
-  const [aba, setAba] = useState<Aba>('transmissao')
-  const [placar, setPlacar] = useState({ gm: 0, gv: 0 })
-  const [eventos, setEventos] = useState<{ hora: string; txt: string; tipo: string }[]>([])
-  const [linkYt, setLinkYt] = useState('')
-  const [jogadorSelecionado, setJogadorSelecionado] = useState<any>(null)
-  const [notasJogadores, setNotasJogadores] = useState<Record<number, number>>({})
-  const [golsJogadores, setGolsJogadores] = useState<Record<number, number>>({})
-  const [cartoesJogadores, setCartoesJogadores] = useState<Record<number, string>>({})
+
+  const jogo = MOCK_DATA.matches.find(j => j.id === jogoId)
+    || todos[0]
+
+  // Estado do jogo
+  const [status, setStatus]         = useState<Status>('pre')
+  const [minuto, setMinuto]         = useState(0)
+  const [acrescimo, setAcrescimo]   = useState(0)
+  const [gm, setGm]                 = useState(0)
+  const [gv, setGv]                 = useState(0)
+  const [linkYt, setLinkYt]         = useState('')
+  const [eventos, setEventos]       = useState<Evento[]>([])
+  const [aba, setAba]               = useState<Aba>('narrar')
   const [escalacaoGerada, setEscalacaoGerada] = useState('')
-  const [gerando, setGerando] = useState(false)
+  const [gerando, setGerando]       = useState(false)
+  const [jogadorOverlay, setJogadorOverlay]   = useState<any>(null)
+  const [pontuacoes, setPontuacoes] = useState<Record<number, PontuacaoJogador>>({})
 
-  const jogo = todos.find(j => j.id === jogoId)
-  const mandanteJogadores = mockJogadoresPorTime(jogo?.mandante_id)
-  const visitanteJogadores = mockJogadoresPorTime(jogo?.visitante_id)
-  const todosJogadoresJogo = [...mandanteJogadores, ...visitanteJogadores]
+  // Timer de jogo
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  useEffect(() => {
+    if (status === 'primeiro' || status === 'segundo') {
+      timerRef.current = setInterval(() => setMinuto(m => m + 1), 60000)
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+  }, [status])
 
-  function addEvento(txt: string, tipo = 'info') {
-    const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-    setEventos(prev => [{ hora, txt, tipo }, ...prev].slice(0, 30))
+  // Jogadores por time
+  const mandanteJogs  = mockJogadoresPorTime(jogo?.mandante_id)
+  const visitanteJogs = mockJogadoresPorTime(jogo?.visitante_id)
+  const todosJogs     = [...mandanteJogs, ...visitanteJogs]
+
+  function getPontuacao(jogador: any): PontuacaoJogador {
+    return pontuacoes[jogador.id] || {
+      jogador, gols: 0, assistencias: 0, defesas: 0,
+      amarelo: false, vermelho: false, nota: null, melhorJogo: false,
+    }
   }
 
-  function atribuirPonto(jogador: any, tipo: 'gol' | 'assistencia' | 'defesa' | 'cartao_a' | 'cartao_v') {
-    if (tipo === 'gol') {
-      setGolsJogadores(g => ({ ...g, [jogador.id]: (g[jogador.id] || 0) + 1 }))
-      const isM = jogador.team_id === jogo?.mandante_id
-      setPlacar(p => isM ? { ...p, gm: p.gm + 1 } : { ...p, gv: p.gv + 1 })
-      const nomeTime = isM ? jogo?.mandante?.nome : jogo?.visitante?.nome
-      addEvento(`⚽ GOL! ${jogador.apelido || jogador.nome} (${nomeTime})`, 'gol')
-    } else if (tipo === 'cartao_a') {
-      setCartoesJogadores(c => ({ ...c, [jogador.id]: 'cartao_a' }))
-      addEvento(`🟨 Amarelo — ${jogador.apelido || jogador.nome}`, 'cartao')
-    } else if (tipo === 'cartao_v') {
-      setCartoesJogadores(c => ({ ...c, [jogador.id]: 'cartao_v' }))
-      addEvento(`🟥 Vermelho — ${jogador.apelido || jogador.nome}`, 'cartao')
-    } else if (tipo === 'assistencia') {
-      addEvento(`🎯 Assistência — ${jogador.apelido || jogador.nome}`, 'info')
-    } else if (tipo === 'defesa') {
-      addEvento(`🧤 Defesa — ${jogador.apelido || jogador.nome}`, 'info')
-    }
+  function setPontuacaoJogador(jogadorId: number, patch: Partial<PontuacaoJogador>) {
+    setPontuacoes(prev => ({
+      ...prev,
+      [jogadorId]: { ...getPontuacao({ id: jogadorId }), ...patch },
+    }))
+  }
+
+  function addEvento(tipo: Evento['tipo'], texto: string, teamId?: number) {
+    setEventos(prev => [{ minuto, tipo, texto, teamId }, ...prev])
+  }
+
+  function iniciarPartida() {
+    setStatus('primeiro')
+    setMinuto(0)
+    addEvento('inicio', '🟢 Partida iniciada!')
+  }
+
+  function iniciarSegundoTempo() {
+    setStatus('segundo')
+    setMinuto(46)
+    addEvento('inicio', '⚽ Segundo tempo iniciado!')
+  }
+
+  function encerrar() {
+    setStatus('encerrado')
+    addEvento('fim', `🏁 Jogo encerrado! Placar final: ${gm} × ${gv}`)
+    setAba('pontuacao')
+  }
+
+  function marcarGol(isM: boolean, nomeTime: string) {
+    if (isM) setGm(g => g + 1); else setGv(g => g + 1)
+    addEvento('gol', `⚽ GOL! ${nomeTime}`, isM ? jogo?.mandante_id : jogo?.visitante_id)
   }
 
   async function gerarEscalacao() {
     setGerando(true)
-    setAba('escalacao')
-    await new Promise(r => setTimeout(r, 1200))
+    setAba('pontuacao')
+    await new Promise(r => setTimeout(r, 1000))
 
-    const nomesUsados: string[] = []
-    function jogadorParaPosicao(posicao: string): string {
-      const j = todosJogadoresJogo.find(x =>
-        x.posicao === posicao && !nomesUsados.includes(x.nome)
-      ) || todosJogadoresJogo.find(x => !nomesUsados.includes(x.nome))
-      if (j) {
-        nomesUsados.push(j.nome)
-        const nota = notasJogadores[j.id]
-        const notaStr = nota ? ` [${nota}]` : ''
-        return `${j.apelido || j.nome}${notaStr}, o ${apelidoAleatorio(posicao)}`
-      }
-      return `Jogador Misterioso, o ${apelidoAleatorio(posicao)}`
+    const usados: number[] = []
+    function pegar(posicao: string): string {
+      const lista = todosJogs.filter(j => !usados.includes(j.id))
+      const c = lista.find(j => j.posicao === posicao) || lista[0]
+      if (!c) return `Jogador, o ${apelidoAleatorio(posicao)}`
+      usados.push(c.id)
+      const p = pontuacoes[c.id]
+      const notaStr = p?.nota ? ` (nota ${p.nota})` : ''
+      return `${c.apelido || c.nome}${notaStr}, o ${apelidoAleatorio(posicao)}`
     }
 
-    const texto = `🎙️ E AÍ GALERA, VEM AÍ A ESCALAÇÃO DIVINOTV!
+    const artilheiro = Object.values(pontuacoes)
+      .filter(p => p.gols > 0)
+      .sort((a, b) => b.gols - a.gols)[0]
+
+    const melhor = Object.values(pontuacoes).find(p => p.melhorJogo)
+      || Object.values(pontuacoes).sort((a, b) => (b.nota || 0) - (a.nota || 0))[0]
+
+    const txt = `🎙️ E AÍ GALERA, VEM AÍ A ESCALAÇÃO DIVINOTV!
+por Alê Oliveira
 
 ⬛ NA META:
-🧤 ${jogadorParaPosicao('goleiro')}
+🧤 ${pegar('goleiro')}
 
-🛡️ NA DEFESA:
-📌 ${jogadorParaPosicao('zagueiro')}
-📌 ${jogadorParaPosicao('zagueiro')}
-📌 ${jogadorParaPosicao('lateral')} (pelo direito)
-📌 ${jogadorParaPosicao('lateral')} (pelo esquerdo)
+🛡️ NA ZAGA:
+📌 ${pegar('zagueiro')}
+📌 ${pegar('zagueiro')}
+
+🏃 NAS LATERAIS:
+📌 ${pegar('lateral')} (direita)
+📌 ${pegar('lateral')} (esquerda)
 
 ⚙️ NO MEIO:
-⚡ ${jogadorParaPosicao('volante')}
-⚡ ${jogadorParaPosicao('volante')}
-⚡ ${jogadorParaPosicao('meia')}
+⚡ ${pegar('volante')}
+⚡ ${pegar('volante')}
+⚡ ${pegar('meia')}
 
 🔥 NO ATAQUE:
-💥 ${jogadorParaPosicao('meia')}
-💥 ${jogadorParaPosicao('atacante')}
-💥 ${jogadorParaPosicao('atacante')}
+💥 ${pegar('meia')}
+💥 ${pegar('atacante')}
+💥 ${pegar('atacante')}
 
-Resultado: ${jogo?.mandante?.nome} ${placar.gm} × ${placar.gv} ${jogo?.visitante?.nome}
+━━━━━━━━━━━━━━━━━━
+🏆 Placar final: ${jogo?.mandante?.nome} ${gm} × ${gv} ${jogo?.visitante?.nome}
+${artilheiro ? `⚽ Artilheiro: ${artilheiro.jogador.apelido || artilheiro.jogador.nome} (${artilheiro.gols} gol${artilheiro.gols > 1 ? 's' : ''})` : ''}
+${melhor ? `⭐ Melhor em campo: ${melhor.jogador.apelido || melhor.jogador.nome}` : ''}
 
-Isso foi Divino App! Até a próxima! 🎙️⚽`.trim()
+Isso foi Divino App! Futebol de verdade! 🎙️⚽`.trim()
 
-    setEscalacaoGerada(texto)
+    setEscalacaoGerada(txt)
     setGerando(false)
   }
 
-  const corEvento: Record<string, string> = {
-    gol: 'text-green-400 border-green-500/20 bg-green-500/5',
-    cartao: 'text-yellow-400 border-yellow-500/20 bg-yellow-500/5',
-    info: 'text-gray-400 border-white/5 bg-white/3',
+  const STATUS_LABEL: Record<Status, { txt: string; cor: string }> = {
+    pre:       { txt: 'Pré-jogo',  cor: 'text-gray-500' },
+    primeiro:  { txt: '1º Tempo',  cor: 'text-green-400' },
+    intervalo: { txt: 'Intervalo', cor: 'text-yellow-400' },
+    segundo:   { txt: '2º Tempo',  cor: 'text-green-400' },
+    encerrado: { txt: 'Encerrado', cor: 'text-gray-600' },
   }
 
+  // ─── RENDER ─────────────────────────────────────────────
   return (
-    <div className="max-w-xl mx-auto">
+    <div className="max-w-lg mx-auto flex flex-col min-h-0">
 
-      {/* Seletor de jogo */}
-      <div className="px-4 py-3 border-b border-white/5">
+      {/* SELETOR */}
+      <div className="px-3 pt-3 pb-2">
         <select value={jogoId} onChange={e => setJogoId(Number(e.target.value))}
-          className="w-full bg-[#0E0F15] border border-white/10 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-red-500 transition">
-          <option value={0}>Selecionar jogo...</option>
+          className="w-full bg-[#111118] border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-red-500 transition">
           {todos.map(j => (
             <option key={j.id} value={j.id}>
-              {j.mandante?.nome} vs {j.visitante?.nome} — R{j.rodada}
+              {j.mandante?.nome} vs {j.visitante?.nome} — R{j.rodada} · {j.championship?.nome}
             </option>
           ))}
         </select>
       </div>
 
+      {/* PAINEL DO PLACAR */}
       {jogo && (
-        <>
-          {/* Placar destaque */}
-          <div className="bg-gradient-to-b from-[#1A0506] to-[#0E0F15] border-b border-red-900/30">
-            <div className="text-center py-2">
-              <span className="flex items-center justify-center gap-1.5">
-                <span className="w-1.5 h-1.5 bg-red-500 rounded-full badge-live" />
-                <span className="text-red-400 text-xs font-condensed tracking-widest">AO VIVO</span>
+        <div className="mx-3 mb-2 rounded-2xl overflow-hidden border border-red-900/30"
+          style={{ background: 'linear-gradient(160deg,#1A0305 0%,#0D0D12 60%)' }}>
+
+          {/* Status + minuto */}
+          <div className="flex items-center justify-between px-4 pt-3 pb-1">
+            <div className="flex items-center gap-2">
+              {(status === 'primeiro' || status === 'segundo') && (
+                <span className="w-2 h-2 bg-red-500 rounded-full badge-live" />
+              )}
+              <span className={`text-xs font-condensed tracking-widest ${STATUS_LABEL[status].cor}`}>
+                {STATUS_LABEL[status].txt}
               </span>
             </div>
-            <div className="flex items-center justify-center gap-2 pb-4 px-4">
-              {/* Mandante */}
-              <div className="flex-1 text-right">
-                <div className="font-bold text-white text-sm leading-tight mb-3">{jogo.mandante?.nome}</div>
-                <div className="flex items-center justify-end gap-2">
-                  <button onClick={() => setPlacar(p => ({ ...p, gm: Math.max(0, p.gm - 1) }))}
-                    className="w-10 h-10 bg-white/8 hover:bg-white/15 rounded-xl text-xl font-bold text-gray-400 active:scale-95 transition">−</button>
-                  <span className="font-display text-6xl text-white w-14 text-center">{placar.gm}</span>
-                  <button onClick={() => { setPlacar(p => ({ ...p, gm: p.gm + 1 })); addEvento(`⚽ GOL! ${jogo.mandante?.nome}`, 'gol') }}
-                    className="w-10 h-10 bg-red-500/25 border border-red-500/40 hover:bg-red-500/40 rounded-xl text-xl font-bold text-red-400 active:scale-95 transition">+</button>
-                </div>
-              </div>
-
-              <span className="font-display text-3xl text-gray-800 mx-2">:</span>
-
-              {/* Visitante */}
-              <div className="flex-1 text-left">
-                <div className="font-bold text-white text-sm leading-tight mb-3">{jogo.visitante?.nome}</div>
-                <div className="flex items-center justify-start gap-2">
-                  <button onClick={() => { setPlacar(p => ({ ...p, gv: p.gv + 1 })); addEvento(`⚽ GOL! ${jogo.visitante?.nome}`, 'gol') }}
-                    className="w-10 h-10 bg-red-500/25 border border-red-500/40 hover:bg-red-500/40 rounded-xl text-xl font-bold text-red-400 active:scale-95 transition">+</button>
-                  <span className="font-display text-6xl text-white w-14 text-center">{placar.gv}</span>
-                  <button onClick={() => setPlacar(p => ({ ...p, gv: Math.max(0, p.gv - 1) }))}
-                    className="w-10 h-10 bg-white/8 hover:bg-white/15 rounded-xl text-xl font-bold text-gray-400 active:scale-95 transition">−</button>
-                </div>
-              </div>
-            </div>
-
-            {/* Link YouTube */}
-            <div className="px-4 pb-3">
-              <input value={linkYt} onChange={e => setLinkYt(e.target.value)}
-                placeholder="🔴 Cole o link do YouTube aqui"
-                className="w-full bg-black/30 border border-red-900/30 rounded-xl px-3 py-2.5 text-white text-xs outline-none focus:border-red-500 placeholder-red-900/60 transition" />
+            <div className="flex items-center gap-1 text-xs text-gray-500">
+              <span className="font-mono">{String(minuto).padStart(2, '0')}'</span>
+              {acrescimo > 0 && (
+                <span className="text-yellow-400 font-bold ml-1">+{acrescimo}'</span>
+              )}
             </div>
           </div>
 
-          {/* Abas */}
-          <div className="flex border-b border-white/5 bg-[#0A0A0D]">
-            {([
-              { key: 'transmissao', icon: '📢', label: 'Narração'  },
-              { key: 'elenco',      icon: '👥', label: 'Elenco'    },
-              { key: 'escalacao',   icon: '🎙️', label: 'Escalação' },
-            ] as const).map(a => (
-              <button key={a.key} onClick={() => setAba(a.key)}
-                className={`flex-1 py-3 text-xs font-condensed tracking-wider border-b-2 transition flex flex-col items-center gap-0.5 ${
-                  aba === a.key ? 'border-red-500 text-white' : 'border-transparent text-gray-600 hover:text-gray-400'
-                }`}>
-                <span className="text-base leading-none">{a.icon}</span>
-                <span>{a.label}</span>
-              </button>
-            ))}
+          {/* Placar */}
+          <div className="flex items-center justify-center gap-3 px-3 py-2">
+            {/* Mandante */}
+            <div className="flex-1">
+              <div className="text-white font-bold text-sm text-center leading-tight mb-2">
+                {jogo.mandante?.nome}
+              </div>
+              <div className="flex items-center justify-center gap-1.5">
+                <button onClick={() => setGm(g => Math.max(0, g - 1))}
+                  className="w-8 h-8 bg-white/8 hover:bg-white/15 rounded-lg text-gray-400 text-lg font-bold active:scale-90 transition">−</button>
+                <span className="font-display text-5xl text-white w-12 text-center leading-none">{gm}</span>
+                <button onClick={() => marcarGol(true, jogo.mandante?.nome || '')}
+                  className="w-8 h-8 bg-red-500/25 border border-red-500/40 hover:bg-red-500/40 rounded-lg text-red-400 text-lg font-bold active:scale-90 transition">+</button>
+              </div>
+            </div>
+
+            <span className="font-display text-2xl text-gray-800 pb-1">:</span>
+
+            {/* Visitante */}
+            <div className="flex-1">
+              <div className="text-white font-bold text-sm text-center leading-tight mb-2">
+                {jogo.visitante?.nome}
+              </div>
+              <div className="flex items-center justify-center gap-1.5">
+                <button onClick={() => marcarGol(false, jogo.visitante?.nome || '')}
+                  className="w-8 h-8 bg-red-500/25 border border-red-500/40 hover:bg-red-500/40 rounded-lg text-red-400 text-lg font-bold active:scale-90 transition">+</button>
+                <span className="font-display text-5xl text-white w-12 text-center leading-none">{gv}</span>
+                <button onClick={() => setGv(g => Math.max(0, g - 1))}
+                  className="w-8 h-8 bg-white/8 hover:bg-white/15 rounded-lg text-gray-400 text-lg font-bold active:scale-90 transition">−</button>
+              </div>
+            </div>
           </div>
 
-          {/* ABA NARRAÇÃO */}
-          {aba === 'transmissao' && (
-            <div className="px-4 py-4">
-              <div className="grid grid-cols-3 gap-2 mb-4">
-                {[
-                  { icon: '🟨', label: 'Cartão Amarelo', tipo: 'cartao', cor: 'border-yellow-500/25 text-yellow-400 hover:bg-yellow-500/10' },
-                  { icon: '🟥', label: 'Cartão Vermelho', tipo: 'cartao', cor: 'border-red-500/25 text-red-400 hover:bg-red-500/10' },
-                  { icon: '⏱️', label: 'Intervalo',      tipo: 'info',   cor: 'border-blue-500/25 text-blue-400 hover:bg-blue-500/10' },
-                  { icon: '🔄', label: 'Substituição',   tipo: 'info',   cor: 'border-green-500/25 text-green-400 hover:bg-green-500/10' },
-                  { icon: '🏁', label: 'Fim de jogo',    tipo: 'info',   cor: 'border-white/15 text-gray-300 hover:bg-white/8' },
-                  { icon: '⚠️', label: 'Paralisação',   tipo: 'info',   cor: 'border-orange-500/25 text-orange-400 hover:bg-orange-500/10' },
-                ].map(btn => (
-                  <button key={btn.label}
-                    onClick={() => addEvento(`${btn.icon} ${btn.label}`, btn.tipo)}
-                    className={`py-3 bg-black/20 border rounded-xl text-xs font-medium transition active:scale-95 flex flex-col items-center gap-1.5 ${btn.cor}`}>
-                    <span className="text-2xl leading-none">{btn.icon}</span>
-                    <span className="leading-tight text-center">{btn.label}</span>
-                  </button>
+          {/* Acréscimos + controles */}
+          <div className="flex items-center gap-2 px-3 py-2.5 border-t border-white/5">
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <span className="text-xs text-gray-600">+</span>
+              <button onClick={() => setAcrescimo(a => Math.max(0, a - 1))}
+                className="w-6 h-6 bg-white/5 rounded text-gray-500 text-xs active:scale-90 transition">−</button>
+              <span className="text-yellow-400 font-mono text-sm w-5 text-center">{acrescimo}'</span>
+              <button onClick={() => { const n = acrescimo + 1; setAcrescimo(n); addEvento('acrescimo', `+${n}' de acréscimo`) }}
+                className="w-6 h-6 bg-white/5 rounded text-gray-500 text-xs active:scale-90 transition">+</button>
+            </div>
+
+            <div className="flex-1 flex gap-1.5 justify-end">
+              {status === 'pre' && (
+                <button onClick={iniciarPartida}
+                  className="px-4 py-2 bg-green-500 text-black text-xs font-bold rounded-xl active:scale-95 transition">
+                  ▶ Iniciar
+                </button>
+              )}
+              {status === 'primeiro' && (
+                <button onClick={() => { setStatus('intervalo'); addEvento('intervalo', '⏸ Intervalo') }}
+                  className="px-4 py-2 bg-yellow-500/20 border border-yellow-500/30 text-yellow-400 text-xs font-bold rounded-xl active:scale-95 transition">
+                  ⏸ Intervalo
+                </button>
+              )}
+              {status === 'intervalo' && (
+                <button onClick={iniciarSegundoTempo}
+                  className="px-4 py-2 bg-green-500 text-black text-xs font-bold rounded-xl active:scale-95 transition">
+                  ▶ 2º Tempo
+                </button>
+              )}
+              {status === 'segundo' && (
+                <button onClick={encerrar}
+                  className="px-4 py-2 bg-red-500 text-white text-xs font-bold rounded-xl active:scale-95 transition">
+                  🏁 Encerrar
+                </button>
+              )}
+              {status === 'encerrado' && (
+                <button onClick={gerarEscalacao}
+                  className="px-4 py-2 bg-white/10 text-white text-xs font-bold rounded-xl active:scale-95 transition">
+                  🎙️ Escalação
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Link YouTube */}
+          <div className="px-3 pb-3">
+            <input value={linkYt} onChange={e => setLinkYt(e.target.value)}
+              placeholder="🔴  Link YouTube da transmissão"
+              className="w-full bg-black/30 border border-red-900/25 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-red-500 placeholder-red-900/60 transition" />
+          </div>
+        </div>
+      )}
+
+      {/* ABAS */}
+      <div className="flex overflow-x-auto border-b border-white/5 bg-[#0A0A0D] px-1 flex-shrink-0"
+        style={{ scrollbarWidth: 'none' }}>
+        {([
+          { key: 'narrar',    icon: '📢', label: 'Narrar'    },
+          { key: 'elencos',   icon: '👥', label: 'Elencos'   },
+          { key: 'prejogo',   icon: '📋', label: 'Pré-Jogo'  },
+          { key: 'pontuacao', icon: '⭐', label: 'Pontuação' },
+        ] as const).map(a => (
+          <button key={a.key} onClick={() => setAba(a.key)}
+            className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-3 text-xs font-condensed tracking-wider border-b-2 transition whitespace-nowrap ${
+              aba === a.key
+                ? 'border-red-500 text-white'
+                : 'border-transparent text-gray-600 hover:text-gray-400'
+            }`}>
+            <span>{a.icon}</span><span>{a.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* CONTEÚDO */}
+      <div className="flex-1 overflow-y-auto">
+
+        {/* ABA NARRAR */}
+        {aba === 'narrar' && (
+          <div className="px-3 py-3 space-y-3">
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { icon: '🟨', label: 'Cartão Amarelo', tipo: 'amarelo'      as const, cor: 'border-yellow-500/25 text-yellow-300 hover:bg-yellow-500/10' },
+                { icon: '🟥', label: 'Cartão Vermelho', tipo: 'vermelho'     as const, cor: 'border-red-500/25 text-red-300 hover:bg-red-500/10' },
+                { icon: '⏱️', label: 'Intervalo',       tipo: 'intervalo'    as const, cor: 'border-blue-500/25 text-blue-300 hover:bg-blue-500/10' },
+                { icon: '🔄', label: 'Substituição',    tipo: 'substituicao' as const, cor: 'border-green-500/25 text-green-300 hover:bg-green-500/10' },
+                { icon: '🏁', label: 'Fim de jogo',     tipo: 'fim'          as const, cor: 'border-white/15 text-gray-300 hover:bg-white/8' },
+                { icon: '⚠️', label: 'Paralisação',    tipo: 'info'         as const, cor: 'border-orange-500/25 text-orange-300 hover:bg-orange-500/10' },
+              ].map(btn => (
+                <button key={btn.label}
+                  onClick={() => addEvento(btn.tipo, `${btn.icon} ${btn.label}`)}
+                  className={`py-3 bg-[#0E0F15] border rounded-xl text-xs font-medium transition active:scale-95 flex flex-col items-center gap-1.5 ${btn.cor}`}>
+                  <span className="text-2xl leading-none">{btn.icon}</span>
+                  <span className="text-center leading-tight">{btn.label}</span>
+                </button>
+              ))}
+            </div>
+
+            <button onClick={gerarEscalacao}
+              className="w-full py-3.5 bg-gradient-to-r from-red-600 to-red-500 text-white font-bold rounded-xl text-sm active:scale-98 transition shadow-lg shadow-red-900/30 flex items-center justify-center gap-2">
+              <span className="text-lg">🎙️</span>
+              Gerar Escalação DivinoTV
+            </button>
+
+            {eventos.length > 0 && (
+              <div className="space-y-1.5">
+                <div className="text-xs text-gray-600 uppercase tracking-wider">Feed do jogo</div>
+                {eventos.map((e, i) => (
+                  <div key={i}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs ${COR_EVENTO[e.tipo] || COR_EVENTO.info}`}>
+                    <span className="font-mono text-gray-600 flex-shrink-0 w-7">{String(e.minuto).padStart(2, '0')}'</span>
+                    <span>{e.texto}</span>
+                  </div>
                 ))}
               </div>
+            )}
+          </div>
+        )}
 
-              <button onClick={gerarEscalacao}
-                className="w-full py-4 bg-gradient-to-r from-red-600 to-red-500 text-white font-bold rounded-xl text-sm mb-4 active:scale-98 transition shadow-lg shadow-red-900/30 flex items-center justify-center gap-2">
-                <span className="text-xl">🎙️</span>
-                Finalizar e gerar Escalação DivinoTV
-              </button>
+        {/* ABA ELENCOS */}
+        {aba === 'elencos' && (
+          <div className="px-3 py-3">
+            {[
+              { time: jogo?.mandante,  jogadores: mandanteJogs },
+              { time: jogo?.visitante, jogadores: visitanteJogs },
+            ].map(({ time, jogadores }) => time && (
+              <div key={time.id} className="mb-5">
+                <div className="flex items-center gap-2 mb-2 px-1">
+                  <div className="w-4 h-4 bg-red-500/20 rounded-full flex items-center justify-center text-xs font-bold text-red-400">
+                    {time.nome?.slice(0, 1)}
+                  </div>
+                  <h3 className="font-bold text-white text-sm">{time.nome}</h3>
+                  <span className="text-xs text-gray-600 ml-auto">{jogadores.length} jogadores</span>
+                </div>
 
-              {eventos.length > 0 && (
-                <div className="space-y-1.5">
-                  <div className="text-xs text-gray-600 uppercase tracking-wider mb-2">Feed do jogo</div>
-                  {eventos.map((e, i) => (
-                    <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs ${corEvento[e.tipo] || corEvento.info}`}>
-                      <span className="text-gray-600 flex-shrink-0 font-mono">{e.hora}</span>
-                      <span>{e.txt}</span>
+                {jogadores.length === 0 ? (
+                  <p className="text-xs text-gray-600 px-1 py-2">Nenhum jogador cadastrado.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="grid grid-cols-12 gap-1 px-3 pb-1">
+                      <span className="col-span-1 text-xs text-gray-700">#</span>
+                      <span className="col-span-5 text-xs text-gray-700">Jogador</span>
+                      <span className="col-span-2 text-xs text-gray-700 text-center">⚽</span>
+                      <span className="col-span-2 text-xs text-gray-700 text-center">🟨</span>
+                      <span className="col-span-2 text-xs text-gray-700 text-center">Nota</span>
+                    </div>
+                    {jogadores.map((j: any, idx: number) => {
+                      const p = getPontuacao(j)
+                      const corNota = p.nota
+                        ? p.nota >= 8 ? 'text-green-400' : p.nota >= 6 ? 'text-yellow-400' : 'text-red-400'
+                        : 'text-gray-700'
+                      return (
+                        <button key={j.id}
+                          onClick={() => setJogadorOverlay(j)}
+                          className="w-full grid grid-cols-12 gap-1 items-center px-3 py-2.5 bg-[#0E0F15] hover:bg-[#161820] rounded-xl border border-white/5 hover:border-red-500/20 transition active:scale-98 text-left">
+                          <span className="col-span-1 text-xs text-gray-600">{idx + 1}</span>
+                          <div className="col-span-5 min-w-0">
+                            <div className="font-medium text-white text-sm truncate">{j.apelido || j.nome}</div>
+                            <div className="text-xs text-gray-600 capitalize">{j.posicao}</div>
+                          </div>
+                          <span className="col-span-2 text-center text-sm">{p.gols > 0 ? `⚽${p.gols}` : ''}</span>
+                          <span className="col-span-2 text-center text-sm">
+                            {p.amarelo ? '🟨' : ''}{p.vermelho ? '🟥' : ''}
+                          </span>
+                          <span className={`col-span-2 text-center font-bold text-sm ${corNota}`}>
+                            {p.nota ?? '—'}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ABA PRÉ-JOGO */}
+        {aba === 'prejogo' && (
+          <div className="px-3 py-3 space-y-4">
+            <div className="bg-[#0E0F15] rounded-2xl p-4 border border-white/5">
+              <div className="text-xs text-gray-600 uppercase tracking-wider mb-3">Informações</div>
+              <div className="space-y-2 text-sm">
+                {[
+                  { label: 'Campeonato', val: jogo?.championship?.nome },
+                  { label: 'Rodada',     val: jogo?.rodada },
+                  { label: 'Local',      val: (jogo as any)?.local || '—' },
+                  { label: 'Data',       val: jogo?.data_hora
+                    ? new Date(jogo.data_hora).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
+                    : '—'
+                  },
+                ].map(r => (
+                  <div key={r.label} className="flex justify-between">
+                    <span className="text-gray-500">{r.label}</span>
+                    <span className="text-white font-medium">{r.val}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-[#0E0F15] rounded-2xl p-4 border border-white/5">
+              <div className="text-xs text-gray-600 uppercase tracking-wider mb-3">Confrontos diretos (histórico)</div>
+              {[
+                { data:'12/03/2026', m:2, v:1, camp:'Copa Divino TV' },
+                { data:'28/01/2026', m:0, v:0, camp:'Liga ABC'       },
+                { data:'15/10/2025', m:3, v:2, camp:'Copa Divino TV' },
+              ].map((c, i) => (
+                <div key={i} className="flex items-center gap-3 py-2 border-b border-white/5 last:border-0">
+                  <span className="text-xs text-gray-600 w-20 flex-shrink-0">{c.data}</span>
+                  <div className="flex-1 flex items-center justify-center gap-2">
+                    <span className="text-white font-bold text-sm">{c.m}</span>
+                    <span className="text-gray-700 text-xs">×</span>
+                    <span className="text-white font-bold text-sm">{c.v}</span>
+                  </div>
+                  <span className="text-xs text-gray-600 text-right flex-shrink-0">{c.camp}</span>
+                </div>
+              ))}
+              <div className="mt-3 grid grid-cols-3 gap-2 pt-2">
+                {[
+                  { label:'Vitórias', val: 2, cor:'text-green-400' },
+                  { label:'Empates',  val: 1, cor:'text-yellow-400' },
+                  { label:'Derrotas', val: 0, cor:'text-red-400' },
+                ].map(s => (
+                  <div key={s.label} className="text-center">
+                    <div className={`font-bold text-xl ${s.cor}`}>{s.val}</div>
+                    <div className="text-xs text-gray-600">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-[#0E0F15] rounded-2xl p-4 border border-white/5">
+              <div className="text-xs text-gray-600 uppercase tracking-wider mb-3">Escalação prevista</div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-xs font-bold text-white mb-2">{jogo?.mandante?.nome}</div>
+                  {mandanteJogs.slice(0, 6).map((j: any, i: number) => (
+                    <div key={j.id} className="flex items-center gap-1.5 py-1">
+                      <span className="text-gray-600 text-xs w-4">{i + 1}</span>
+                      <span className="text-white text-xs">{j.apelido || j.nome}</span>
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
-          )}
-
-          {/* ABA ELENCO */}
-          {aba === 'elenco' && (
-            <div className="px-4 py-4">
-              {[
-                { time: jogo.mandante, jogadores: mandanteJogadores },
-                { time: jogo.visitante, jogadores: visitanteJogadores },
-              ].map(({ time, jogadores }) => (
-                <div key={time?.id} className="mb-6">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-6 h-6 bg-red-500/15 rounded-full flex items-center justify-center text-xs font-bold text-red-400 flex-shrink-0">
-                      {time?.nome?.slice(0, 1)}
-                    </div>
-                    <h3 className="font-bold text-white text-sm">{time?.nome}</h3>
-                  </div>
-
-                  {jogadores.length === 0 ? (
-                    <p className="text-xs text-gray-600 py-3 pl-2">Nenhum jogador cadastrado neste elenco.</p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {jogadores.map(j => {
-                        const nota = notasJogadores[j.id]
-                        const gols = golsJogadores[j.id] || 0
-                        const cartao = cartoesJogadores[j.id]
-                        const corNota = nota
-                          ? nota >= 8 ? 'text-green-400' : nota >= 6 ? 'text-yellow-400' : 'text-red-400'
-                          : 'text-gray-700'
-                        return (
-                          <button key={j.id}
-                            onClick={() => setJogadorSelecionado(j)}
-                            className="w-full flex items-center gap-3 p-3 bg-[#0E0F15] hover:bg-[#161820] rounded-xl border border-white/5 hover:border-red-500/20 transition text-left active:scale-98">
-                            <div className="w-9 h-9 bg-white/5 rounded-full flex items-center justify-center text-sm font-bold text-gray-400 flex-shrink-0 font-condensed">
-                              {(j.apelido || j.nome).slice(0, 2).toUpperCase()}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-bold text-white text-sm truncate">{j.apelido || j.nome}</div>
-                              <div className="text-xs text-gray-600 capitalize">{j.posicao}</div>
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              {gols > 0 && <span className="text-xs bg-green-500/15 text-green-400 px-1.5 py-0.5 rounded font-bold">⚽ {gols}</span>}
-                              {cartao === 'cartao_a' && <span>🟨</span>}
-                              {cartao === 'cartao_v' && <span>🟥</span>}
-                              {nota && <span className={`text-sm font-bold ${corNota}`}>{nota}</span>}
-                              <span className="text-gray-700 text-xs">›</span>
-                            </div>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* ABA ESCALAÇÃO */}
-          {aba === 'escalacao' && (
-            <div className="px-4 py-4">
-              {gerando ? (
-                <div className="text-center py-16">
-                  <div className="text-4xl mb-4 animate-pulse">🎙️</div>
-                  <div className="font-display text-2xl text-red-400">Gerando Escalação DivinoTV...</div>
-                  <div className="text-xs text-gray-600 mt-2">Alê Oliveira está preparando tudo</div>
-                </div>
-              ) : escalacaoGerada ? (
                 <div>
-                  <div className="flex items-center gap-2 mb-4">
-                    <span className="text-2xl">🎙️</span>
+                  <div className="text-xs font-bold text-white mb-2">{jogo?.visitante?.nome}</div>
+                  {visitanteJogs.slice(0, 6).map((j: any, i: number) => (
+                    <div key={j.id} className="flex items-center gap-1.5 py-1">
+                      <span className="text-gray-600 text-xs w-4">{i + 1}</span>
+                      <span className="text-white text-xs">{j.apelido || j.nome}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-[#0E0F15] rounded-2xl p-4 border border-white/5">
+              <div className="text-xs text-gray-600 uppercase tracking-wider mb-2">Notas do narrador</div>
+              <textarea
+                placeholder="Anotações sobre o jogo, contexto, curiosidades..."
+                rows={4}
+                className="w-full bg-white/5 border border-white/8 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-red-500 transition resize-none placeholder-gray-700" />
+            </div>
+          </div>
+        )}
+
+        {/* ABA PONTUAÇÃO */}
+        {aba === 'pontuacao' && (
+          <div className="px-3 py-3">
+            {/* Escalação gerada */}
+            {escalacaoGerada && (
+              <div className="mb-4 bg-[#0E0F15] rounded-2xl border border-red-900/30 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🎙️</span>
                     <div>
                       <div className="font-bold text-white text-sm">Escalação DivinoTV</div>
                       <div className="text-xs text-gray-600">por Alê Oliveira</div>
                     </div>
-                    <button
-                      onClick={() => navigator.clipboard.writeText(escalacaoGerada)}
-                      className="ml-auto text-xs text-red-400 border border-red-500/20 px-3 py-1.5 rounded-lg hover:bg-red-500/10 transition">
-                      Copiar
-                    </button>
                   </div>
-                  <div className="bg-[#0E0F15] rounded-xl border border-white/5 p-4">
-                    <pre className="text-xs text-gray-300 whitespace-pre-wrap leading-relaxed font-sans">
-                      {escalacaoGerada}
-                    </pre>
-                  </div>
+                  <button onClick={() => navigator.clipboard.writeText(escalacaoGerada)}
+                    className="text-xs text-red-400 border border-red-500/20 px-3 py-1.5 rounded-lg hover:bg-red-500/10 transition">
+                    Copiar
+                  </button>
+                </div>
+                <div className="px-4 py-3">
+                  <pre className="text-xs text-gray-300 whitespace-pre-wrap leading-relaxed font-sans">
+                    {escalacaoGerada}
+                  </pre>
+                </div>
+                <div className="px-4 pb-3">
                   <button onClick={gerarEscalacao}
-                    className="w-full mt-4 py-3 border border-white/10 rounded-xl text-sm text-gray-400 hover:text-white hover:bg-white/5 transition">
+                    className="w-full py-2.5 border border-white/8 rounded-xl text-xs text-gray-500 hover:text-gray-300 transition">
                     🎲 Gerar novamente
                   </button>
                 </div>
-              ) : (
-                <div className="text-center py-12">
-                  <div className="text-5xl mb-4">🎙️</div>
-                  <div className="font-bold text-white mb-2">Pronto pra escalação?</div>
-                  <div className="text-xs text-gray-500 mb-6 max-w-xs mx-auto">
-                    Avalie os jogadores na aba Elenco antes de gerar para uma escalação mais personalizada
-                  </div>
-                  <button onClick={gerarEscalacao}
-                    className="px-6 py-3 bg-red-500 text-white font-bold rounded-xl text-sm hover:bg-red-600 transition">
-                    Gerar Escalação DivinoTV
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </>
-      )}
+              </div>
+            )}
 
-      {/* OVERLAY do jogador */}
-      {jogadorSelecionado && (
+            {!escalacaoGerada && !gerando && (
+              <button onClick={gerarEscalacao}
+                className="w-full py-4 mb-4 bg-red-500/10 border border-red-500/20 text-red-400 font-bold rounded-xl text-sm active:scale-98 transition flex items-center justify-center gap-2">
+                <span>🎙️</span> Gerar Escalação DivinoTV
+              </button>
+            )}
+
+            {gerando && (
+              <div className="text-center py-8 mb-4">
+                <div className="text-4xl mb-3 animate-pulse">🎙️</div>
+                <div className="text-sm text-red-400 font-bold">Gerando escalação...</div>
+              </div>
+            )}
+
+            {/* Legenda */}
+            <div className="flex gap-3 mb-3 px-1 flex-wrap text-xs text-gray-600">
+              <span>⚽ Gol = 8pts</span>
+              <span>🎯 Assist = 5pts</span>
+              <span>🧤 Defesa = 3pts</span>
+              <span>🟨 Amarelo = −2</span>
+              <span>🟥 Vermelho = −5</span>
+            </div>
+
+            {/* Ranking */}
+            <div className="text-xs text-gray-600 uppercase tracking-wider mb-2 px-1">Pontuação dos Jogadores</div>
+            <div className="space-y-1.5">
+              {todosJogs
+                .map((j: any) => {
+                  const p = getPontuacao(j)
+                  const pts =
+                    (p.gols * 8) + (p.assistencias * 5) + (p.defesas * 3) +
+                    (p.nota ? Math.round((p.nota - 5) * 2) : 0) +
+                    (p.amarelo ? -2 : 0) + (p.vermelho ? -5 : 0)
+                  return { j, p, pts }
+                })
+                .sort((a, b) => b.pts - a.pts)
+                .map(({ j, p, pts }, idx) => (
+                  <button key={j.id}
+                    onClick={() => setJogadorOverlay(j)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 bg-[#0E0F15] hover:bg-[#161820] rounded-xl border border-white/5 hover:border-red-500/15 transition active:scale-98 text-left">
+                    <span className={`w-5 text-center font-bold text-sm flex-shrink-0 ${idx < 3 ? 'text-yellow-400' : 'text-gray-700'}`}>
+                      {idx + 1}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-white text-sm truncate">{j.apelido || j.nome}</div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {p.gols > 0 && <span className="text-xs text-green-400">⚽{p.gols}</span>}
+                        {p.assistencias > 0 && <span className="text-xs text-blue-400">🎯{p.assistencias}</span>}
+                        {p.defesas > 0 && <span className="text-xs text-purple-400">🧤{p.defesas}</span>}
+                        {p.amarelo && <span className="text-xs">🟨</span>}
+                        {p.vermelho && <span className="text-xs">🟥</span>}
+                        {p.melhorJogo && <span className="text-xs text-yellow-400">⭐</span>}
+                      </div>
+                    </div>
+                    {p.nota && (
+                      <span className={`text-xs font-bold flex-shrink-0 ${p.nota >= 8 ? 'text-green-400' : p.nota >= 6 ? 'text-yellow-400' : 'text-red-400'}`}>
+                        {p.nota}
+                      </span>
+                    )}
+                    <div className={`flex-shrink-0 w-12 text-center font-bold rounded-lg py-1 text-sm ${pts >= 0 ? 'text-green-400 bg-green-500/10' : 'text-red-400 bg-red-500/10'}`}>
+                      {pts > 0 ? '+' : ''}{pts}
+                    </div>
+                  </button>
+                ))
+              }
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* OVERLAY DO JOGADOR */}
+      {jogadorOverlay && (
         <JogadorOverlay
-          jogador={jogadorSelecionado}
-          nota={notasJogadores[jogadorSelecionado.id]}
-          gols={golsJogadores[jogadorSelecionado.id] || 0}
-          cartao={cartoesJogadores[jogadorSelecionado.id]}
-          onSetNota={n => setNotasJogadores(prev => ({ ...prev, [jogadorSelecionado.id]: n }))}
-          onAcao={tipo => atribuirPonto(jogadorSelecionado, tipo)}
-          onFechar={() => setJogadorSelecionado(null)}
+          jogador={jogadorOverlay}
+          pontuacao={getPontuacao(jogadorOverlay)}
+          onSave={patch => {
+            setPontuacaoJogador(jogadorOverlay.id, patch)
+            if (patch.gols !== undefined) {
+              const delta = (patch.gols || 0) - getPontuacao(jogadorOverlay).gols
+              if (delta > 0) addEvento('gol', `⚽ Gol de ${jogadorOverlay.apelido || jogadorOverlay.nome}`)
+            }
+          }}
+          onFechar={() => setJogadorOverlay(null)}
         />
       )}
     </div>
   )
 }
 
-function JogadorOverlay({ jogador, nota, gols, cartao, onSetNota, onAcao, onFechar }: {
+// ─── OVERLAY DO JOGADOR ────────────────────────────────────
+function JogadorOverlay({ jogador, pontuacao, onSave, onFechar }: {
   jogador: any
-  nota?: number
-  gols: number
-  cartao?: string
-  onSetNota: (n: number) => void
-  onAcao: (tipo: 'gol' | 'assistencia' | 'defesa' | 'cartao_a' | 'cartao_v') => void
+  pontuacao: PontuacaoJogador
+  onSave: (p: Partial<PontuacaoJogador>) => void
   onFechar: () => void
 }) {
-  const corNota = nota
-    ? nota >= 8 ? '#00D68F' : nota >= 6 ? '#F5B800' : '#E8232A'
+  const [local, setLocal] = useState<PontuacaoJogador>({ ...pontuacao })
+
+  const corNota = local.nota
+    ? local.nota >= 8 ? '#00D68F' : local.nota >= 6 ? '#F5B800' : '#E8232A'
     : '#3D4055'
+
+  const pts =
+    (local.gols * 8) + (local.assistencias * 5) + (local.defesas * 3) +
+    (local.nota ? Math.round((local.nota - 5) * 2) : 0) +
+    (local.amarelo ? -2 : 0) + (local.vermelho ? -5 : 0)
+
+  function salvar() {
+    onSave(local)
+    onFechar()
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end" onClick={onFechar}>
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-      <div
-        className="relative w-full bg-[#0E0F15] rounded-t-3xl border-t border-white/10 p-5 pb-8 max-h-[90vh] overflow-y-auto"
+      <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" />
+      <div className="relative w-full max-h-[90vh] overflow-y-auto bg-[#0D0D14] rounded-t-3xl border-t border-white/10"
         onClick={e => e.stopPropagation()}>
 
-        <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-5" />
-
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
-          <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center text-2xl font-bold text-gray-400 flex-shrink-0 font-condensed tracking-wider">
-            {(jogador.apelido || jogador.nome).slice(0, 2).toUpperCase()}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="font-bold text-white text-xl truncate">{jogador.apelido || jogador.nome}</div>
-            <div className="text-gray-500 text-sm truncate">{jogador.nome}</div>
-            <div className="text-xs text-red-400 font-condensed tracking-wider uppercase mt-0.5">{jogador.posicao}</div>
-          </div>
-          <div className="w-14 h-14 rounded-full border-2 flex flex-col items-center justify-center flex-shrink-0"
-            style={{ borderColor: corNota }}>
-            <span className="font-bold text-lg leading-none" style={{ color: corNota }}>{nota ?? '—'}</span>
-            <span className="text-gray-700 text-xs leading-none">nota</span>
-          </div>
+        <div className="sticky top-0 bg-[#0D0D14] pt-4 pb-2 px-5 z-10">
+          <div className="w-10 h-1 bg-white/15 rounded-full mx-auto mb-1" />
         </div>
 
-        {/* Stats rápidos */}
-        <div className="grid grid-cols-3 gap-2 mb-5">
-          <div className="bg-white/3 rounded-xl p-3 text-center">
-            <div className="text-xl font-bold text-green-400">{gols}</div>
-            <div className="text-xs text-gray-600 mt-0.5">Gols</div>
+        <div className="px-5 pb-8">
+          {/* Header */}
+          <div className="flex items-center gap-4 mb-5">
+            <div className="w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center text-xl font-bold text-gray-400 font-condensed tracking-wider flex-shrink-0">
+              {(jogador.apelido || jogador.nome)?.slice(0, 2).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-bold text-white text-lg truncate">{jogador.apelido || jogador.nome}</div>
+              <div className="text-gray-500 text-xs">{jogador.nome}</div>
+              <div className="text-red-400 text-xs font-condensed uppercase tracking-wide">{jogador.posicao}</div>
+            </div>
+            <div className="text-center flex-shrink-0">
+              <div className={`text-2xl font-bold ${pts >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {pts > 0 ? '+' : ''}{pts}
+              </div>
+              <div className="text-xs text-gray-600">pts</div>
+            </div>
           </div>
-          <div className="bg-white/3 rounded-xl p-3 text-center">
-            <div className="text-xl">{cartao === 'cartao_a' ? '🟨' : cartao === 'cartao_v' ? '🟥' : '—'}</div>
-            <div className="text-xs text-gray-600 mt-0.5">Cartão</div>
-          </div>
-          <div className="bg-white/3 rounded-xl p-3 text-center">
-            <div className="text-xl font-bold text-gray-400">—</div>
-            <div className="text-xs text-gray-600 mt-0.5">Jogos</div>
-          </div>
-        </div>
 
-        {/* Nota slider */}
-        <div className="mb-5">
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-xs text-gray-500 uppercase tracking-wider">Nota DivinoTV</label>
-            <span className="font-bold text-sm" style={{ color: corNota }}>
-              {nota ?? 'Não avaliado'}
-            </span>
-          </div>
-          <input type="range" min="1" max="10" step="0.5"
-            value={nota ?? 5}
-            onChange={e => onSetNota(Number(e.target.value))}
-            className="w-full accent-red-500" />
-          <div className="flex justify-between text-xs text-gray-700 mt-1">
-            <span>1 — Ruim</span>
-            <span>5 — OK</span>
-            <span>10 — Fenômeno</span>
-          </div>
-        </div>
+          {/* Ações com contador */}
+          <div className="grid grid-cols-4 gap-2 mb-5">
+            {([
+              { label: 'Gol',     icon: '⚽', campo: 'gols'        as const, bg: 'bg-green-500/10  border-green-500/20',  txt: 'text-green-400'  },
+              { label: 'Assist.', icon: '🎯', campo: 'assistencias' as const, bg: 'bg-blue-500/10   border-blue-500/20',   txt: 'text-blue-400'   },
+              { label: 'Defesa',  icon: '🧤', campo: 'defesas'      as const, bg: 'bg-purple-500/10 border-purple-500/20', txt: 'text-purple-400' },
+            ] as const).map(btn => (
+              <div key={btn.campo}
+                className={`flex flex-col items-center gap-1 p-2.5 border rounded-xl ${btn.bg}`}>
+                <span className="text-xl">{btn.icon}</span>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setLocal(l => ({ ...l, [btn.campo]: Math.max(0, l[btn.campo] - 1) }))}
+                    className="w-5 h-5 bg-white/10 rounded text-xs active:scale-90">−</button>
+                  <span className={`font-bold text-sm w-4 text-center ${btn.txt}`}>{local[btn.campo]}</span>
+                  <button onClick={() => setLocal(l => ({ ...l, [btn.campo]: l[btn.campo] + 1 }))}
+                    className="w-5 h-5 bg-white/10 rounded text-xs active:scale-90">+</button>
+                </div>
+                <span className="text-xs text-gray-600">{btn.label}</span>
+              </div>
+            ))}
 
-        {/* Botões de ação */}
-        <div className="grid grid-cols-4 gap-2 mb-4">
-          {[
-            { tipo: 'gol'         as const, icon: '⚽', label: 'Gol',      cor: 'bg-green-500/15 text-green-400 border-green-500/25' },
-            { tipo: 'assistencia' as const, icon: '🎯', label: 'Assist.',  cor: 'bg-blue-500/15 text-blue-400 border-blue-500/25' },
-            { tipo: 'defesa'      as const, icon: '🧤', label: 'Defesa',   cor: 'bg-purple-500/15 text-purple-400 border-purple-500/25' },
-            { tipo: 'cartao_a'    as const, icon: '🟨', label: 'Amarelo',  cor: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/25' },
-          ].map(btn => (
-            <button key={btn.tipo}
-              onClick={() => onAcao(btn.tipo)}
-              className={`py-3 border rounded-xl text-xs font-medium active:scale-95 transition flex flex-col items-center gap-1.5 ${btn.cor}`}>
-              <span className="text-2xl leading-none">{btn.icon}</span>
-              <span>{btn.label}</span>
+            {/* Melhor do jogo */}
+            <button onClick={() => setLocal(l => ({ ...l, melhorJogo: !l.melhorJogo }))}
+              className={`flex flex-col items-center gap-1 p-2.5 border rounded-xl transition ${local.melhorJogo ? 'bg-yellow-500/15 border-yellow-500/30' : 'bg-white/3 border-white/10'}`}>
+              <span className="text-xl">⭐</span>
+              <span className={`text-xs font-bold ${local.melhorJogo ? 'text-yellow-400' : 'text-gray-600'}`}>
+                {local.melhorJogo ? 'Melhor!' : 'Melhor'}
+              </span>
+              <span className="text-xs text-gray-600">do jogo</span>
             </button>
-          ))}
-        </div>
+          </div>
 
-        <button onClick={onFechar}
-          className="w-full py-3 border border-white/8 rounded-xl text-sm text-gray-500 hover:text-gray-300 transition">
-          Fechar
-        </button>
+          {/* Cartões */}
+          <div className="flex gap-2 mb-5">
+            <button onClick={() => setLocal(l => ({ ...l, amarelo: !l.amarelo }))}
+              className={`flex-1 py-2.5 border rounded-xl text-sm font-bold transition ${local.amarelo ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-300' : 'bg-white/3 border-white/8 text-gray-500'}`}>
+              🟨 Amarelo
+            </button>
+            <button onClick={() => setLocal(l => ({ ...l, vermelho: !l.vermelho }))}
+              className={`flex-1 py-2.5 border rounded-xl text-sm font-bold transition ${local.vermelho ? 'bg-red-500/20 border-red-500/40 text-red-300' : 'bg-white/3 border-white/8 text-gray-500'}`}>
+              🟥 Vermelho
+            </button>
+          </div>
+
+          {/* Nota */}
+          <div className="mb-5">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs text-gray-500 uppercase tracking-wider">Nota DivinoTV</span>
+              <div className="w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold text-sm"
+                style={{ borderColor: corNota, color: corNota }}>
+                {local.nota ?? '—'}
+              </div>
+            </div>
+            <input type="range" min="1" max="10" step="0.5"
+              value={local.nota ?? 5}
+              onChange={e => setLocal(l => ({ ...l, nota: Number(e.target.value) }))}
+              className="w-full accent-red-500" />
+            <div className="flex justify-between text-xs text-gray-700 mt-1">
+              <span>1 — Ruim</span><span>5 — OK</span><span>10 — Fenômeno</span>
+            </div>
+          </div>
+
+          {/* Botões */}
+          <div className="flex gap-2">
+            <button onClick={onFechar}
+              className="flex-1 py-3 border border-white/8 rounded-xl text-sm text-gray-500 hover:text-gray-300 transition">
+              Cancelar
+            </button>
+            <button onClick={salvar}
+              className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl text-sm active:scale-98 transition">
+              Salvar
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )
