@@ -15,6 +15,7 @@ import AdminTimes from './pages/admin/AdminTimes'
 import AdminJogos from './pages/admin/AdminJogos'
 import AdminSumula from './pages/admin/AdminSumula'
 import AdminNarracao from './pages/admin/AdminNarracao'
+import DivinoLeague from './pages/DivinoLeague'
 
 export default function App() {
   return (
@@ -35,6 +36,7 @@ export default function App() {
           <Route path="/admin/jogos"       element={<AdminLayout><AdminJogos /></AdminLayout>} />
           <Route path="/admin/jogos/:id/sumula" element={<AdminLayout><AdminSumula /></AdminLayout>} />
           <Route path="/admin/narracao" element={<AdminLayout><AdminNarracao /></AdminLayout>} />
+          <Route path="/divino-league" element={<DivinoLeague />} />
         </Routes>
       </main>
       <BottomNav />

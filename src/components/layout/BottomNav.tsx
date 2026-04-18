@@ -1,10 +1,10 @@
 import { Link, useLocation } from 'react-router-dom'
 
 const ITEMS = [
-  { to: '/',          icon: '🏠', label: 'Home'      },
-  { to: '/scout',     icon: '🔍', label: 'Scout'     },
-  { to: '/destaques', icon: '⭐', label: 'Destaques' },
-  { to: '/admin',     icon: '⚙️',  label: 'Admin'    },
+  { to: '/',               icon: '🏠', label: 'Home'    },
+  { to: '/scout',          icon: '🔍', label: 'Scout'   },
+  { to: '/destaques',      icon: '⭐', label: 'Top'     },
+  { to: '/divino-league',  icon: '🏆', label: 'League'  },
 ]
 
 export function BottomNav() {
