@@ -1,5 +1,7 @@
 import { useParams, Link } from 'react-router-dom'
 import { MOCK_DATA } from '../lib/mockData'
+import { ShareButton } from '../components/ShareButton'
+import { gerarRelatorioScout } from '../lib/gerarRelatorioScout'
 
 export default function Player() {
   const { id } = useParams()
@@ -93,6 +95,41 @@ export default function Player() {
           <StatBox value={golsList.length} label="Gols" />
           <StatBox value={melhorCount} label="Melhor do Jogo" gold={melhorCount > 0} />
         </div>
+
+        <div className="flex gap-3 mt-5 flex-wrap">
+          <ShareButton
+            titulo={`${playerLabel} — Scout Divino TV`}
+            texto={`${playerLabel} — Nota média ${notaMedia || '—'} | ${golsList.length} gols | ${melhorCount}x Melhor do Jogo pela Divino TV. Veja o perfil completo:`}
+          />
+          <button
+            onClick={() => gerarRelatorioScout({
+              nome: player.nome,
+              apelido: player.apelido,
+              posicao: player.posicao,
+              nota_media: notaMedia,
+              jogos: notasOrd.length,
+              gols_total: golsList.length,
+              melhor_jogo_count: melhorCount,
+              historico_notas: notasOrd.map(n => ({
+                nota: n.nota,
+                melhor_jogo: n.melhor_jogo,
+                match_id: n.matchId,
+                jogo: {
+                  mandante: { nome: n.mandante },
+                  visitante: { nome: n.visitante },
+                  rodada: n.rodada,
+                  championship: { nome: n.campeonato },
+                },
+              })),
+              premios: [],
+            })}
+            className="flex items-center gap-2 px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 text-sm font-medium rounded-full transition">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+            </svg>
+            Baixar relatório scout (PDF)
+          </button>
+        </div>
       </div>
 
       {/* Histórico de notas */}
@@ -150,6 +187,22 @@ export default function Player() {
           ))}
         </div>
       )}
+
+      {/* Reivindicar perfil */}
+      <div className="mt-8 p-4 bg-[#0E0F15] rounded-2xl border border-dashed border-white/10 text-center">
+        <div className="text-2xl mb-2">👤</div>
+        <div className="font-bold text-white text-sm mb-1">Este é você?</div>
+        <div className="text-xs text-gray-500 mb-4">
+          Reivindique seu perfil para adicionar foto, informações e receber notificações quando for avaliado.
+        </div>
+        <a href={`https://wa.me/5511999999999?text=${encodeURIComponent(`Olá Divino TV! Quero reivindicar meu perfil no Divino App. Meu nome é ${player.nome}.`)}`}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 text-green-400 text-sm font-medium rounded-full transition">
+          <span>💬</span>
+          Falar com a Divino TV no WhatsApp
+        </a>
+      </div>
     </div>
   )
 }

@@ -1,44 +1,58 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap');
+body { background: #060608; color: white; font-family: 'Inter', sans-serif; margin: 0; }
 
-body {
-  background: #060608;
-  color: white;
-  font-family: 'Inter', sans-serif;
-  margin: 0;
+/* Display: placares e títulos principais */
+.font-display  { font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.02em; }
+
+/* Condensed: labels, categorias, badges */
+.font-condensed { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; letter-spacing: 0.08em; }
+
+/* Placar gigante — hero e detalhe de jogo */
+.placar-hero {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(64px, 12vw, 120px);
+  line-height: 1;
+  letter-spacing: 0.04em;
+  color: #fff;
+  text-shadow: 0 0 40px rgba(232,35,42,0.3);
 }
 
-.font-display { font-family: 'Bebas Neue', sans-serif; }
+/* Badge AO VIVO */
+@keyframes pulse-live { 0%,100%{opacity:1} 50%{opacity:0.4} }
+.badge-live { animation: pulse-live 1.5s ease-in-out infinite; }
+
+/* Card hover */
+.card-hover {
+  border: 1px solid rgba(255,255,255,0.06);
+  transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s;
+}
+.card-hover:hover {
+  border-color: rgba(232,35,42,0.35);
+  box-shadow: 0 4px 24px rgba(232,35,42,0.08);
+  transform: translateY(-1px);
+}
+
+/* Gradiente texto */
+.text-gradient {
+  background: linear-gradient(135deg, #E8232A 0%, #FF6B35 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
 
 .glow-red {
   box-shadow: 0 0 20px rgba(232,35,42,0.3), 0 0 60px rgba(232,35,42,0.1);
 }
 
-.card-hover {
-  border: 1px solid rgba(255,255,255,0.06);
-  transition: all 0.2s ease;
-}
-.card-hover:hover {
-  border-color: rgba(232,35,42,0.4);
-  box-shadow: 0 4px 24px rgba(232,35,42,0.1);
-  transform: translateY(-1px);
-}
-
-@keyframes pulse-live {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-.badge-live { animation: pulse-live 1.5s infinite; }
-
-.text-gradient {
-  background: linear-gradient(135deg, #E8232A, #F5B800);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: #0E0F15; }
+/* Scrollbar */
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #E8232A; border-radius: 2px; }
+
+/* PWA safe area */
+.pb-safe { padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }

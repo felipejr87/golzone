@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { MOCK_DATA } from '../lib/mockData'
+import { ShareButton } from '../components/ShareButton'
 
 export default function Match() {
   const { id } = useParams()
@@ -73,15 +74,22 @@ export default function Match() {
           {match.sumula?.publico && <span>👥 {Number(match.sumula.publico).toLocaleString('pt-BR')}</span>}
         </div>
 
-        {match.link_video && (
-          <div className="flex justify-center mt-5">
+        <div className="flex items-center justify-center gap-3 mt-5 flex-wrap">
+          {match.link_video && (
             <a href={match.link_video} target="_blank" rel="noreferrer"
               className="flex items-center gap-2 px-6 py-3 bg-[#E8232A] text-white font-bold rounded-full hover:bg-[#B01B21] transition glow-red">
               <YtIcon />
               Assistir narração completa
             </a>
-          </div>
-        )}
+          )}
+          <ShareButton
+            titulo={`${match.mandante?.nome} vs ${match.visitante?.nome} — Divino TV`}
+            texto={match.resultado
+              ? `${match.mandante?.nome} ${match.resultado.gols_mandante} × ${match.resultado.gols_visitante} ${match.visitante?.nome} — ${match.championship?.nome} Rodada ${match.rodada}. Veja a súmula completa pela Divino TV:`
+              : `${match.mandante?.nome} vs ${match.visitante?.nome} — ${match.championship?.nome} Rodada ${match.rodada}. Acompanhe ao vivo pela Divino TV:`
+            }
+          />
+        </div>
       </div>
 
       {/* ── MELHOR DO JOGO ── */}

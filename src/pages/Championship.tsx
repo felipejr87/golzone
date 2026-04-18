@@ -21,16 +21,6 @@ export default function Championship() {
     ? [...new Set(tabela.map(t => t.grupo).filter(Boolean))] as string[]
     : []
 
-  // Para jogos: agrupar por fase (KL) ou rodada (demais)
-  function secaoLabel(j: typeof jogos[number]) {
-    const f = (j as { fase?: string }).fase
-    if (!f) return `Rodada ${j.rodada}`
-    if (f === 'grupo') return `Fase de Grupos`
-    if (f === 'semi')  return 'Semifinais'
-    if (f === 'final') return 'Final'
-    return `Rodada ${j.rodada}`
-  }
-
   const secoes = isKingsLeague
     ? (['grupo', 'semi', 'final'] as const).map(fase => ({
         key: fase,

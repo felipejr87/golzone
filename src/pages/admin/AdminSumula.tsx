@@ -1,246 +1,250 @@
-import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
+import { useParams } from 'react-router-dom'
+import { useState } from 'react'
+import { MOCK_DATA } from '../../lib/mockData'
 
-type GoalRow = { id?:number; jogador:string; team_id:string; minuto:string; tipo:string }
-type CardRow = { id?:number; jogador:string; team_id:string; minuto:string; tipo:string }
-type NotaRow = { player_nome:string; team_id:string; nota:string; melhor_jogo:boolean }
+type Aba = 'placar' | 'gols' | 'cartoes' | 'notas' | 'relatorio'
 
 export default function AdminSumula() {
   const { id } = useParams()
-  const [match, setMatch] = useState<any>(null)
-  const [gols, setGols] = useState<GoalRow[]>([])
-  const [cartoes, setCartoes] = useState<CardRow[]>([])
-  const [notas, setNotas] = useState<NotaRow[]>([])
-  const [report, setReport] = useState({ arbitro:'', publico:'', observacoes:'' })
-  const [aba, setAba] = useState<'gols'|'cartoes'|'notas'|'relatorio'>('gols')
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
+  const match = MOCK_DATA.matches.find(m => m.id === Number(id))
+  const [aba, setAba] = useState<Aba>('placar')
+  const [salvando, setSalvando] = useState(false)
+  const [salvo, setSalvo] = useState<Aba | null>(null)
 
-  async function carregar() {
-    const { data } = await supabase.from('matches').select(`
-      *, mandante:teams!mandante_id(id,nome), visitante:teams!visitante_id(id,nome),
-      gols:match_goals(*), cartoes:match_cards(*),
-      notas:match_ratings(*, player:players(nome)),
-      sumula:match_reports(*)
-    `).eq('id', id).single()
-    if (!data) return
-    setMatch(data)
-    if (data.gols?.length) setGols(data.gols.map((g: any) => ({ id:g.id, jogador:g.jogador, team_id:String(g.team_id), minuto:String(g.minuto||''), tipo:g.tipo })))
-    if (data.cartoes?.length) setCartoes(data.cartoes.map((c: any) => ({ id:c.id, jogador:c.jogador, team_id:String(c.team_id), minuto:String(c.minuto||''), tipo:c.tipo })))
-    if (data.notas?.length) setNotas(data.notas.map((n: any) => ({ player_nome:n.player?.nome||'', team_id:String(n.team_id), nota:String(n.nota), melhor_jogo:n.melhor_jogo })))
-    if (data.sumula) setReport({ arbitro:data.sumula.arbitro||'', publico:String(data.sumula.publico||''), observacoes:data.sumula.observacoes||'' })
-  }
-  useEffect(() => { carregar() }, [id])
+  const [placar, setPlacar] = useState({
+    gm: match?.resultado?.gols_mandante ?? 0,
+    gv: match?.resultado?.gols_visitante ?? 0,
+  })
+  const [gols, setGols] = useState<any[]>(match?.gols || [])
+  const [cartoes, setCartoes] = useState<any[]>(match?.cartoes || [])
+  const [notas, setNotas] = useState<any[]>(match?.notas || [])
+  const [relatorio, setRelatorio] = useState(
+    match?.sumula || { arbitro: '', publico: '', observacoes: '' }
+  )
 
-  async function salvar() {
-    setSaving(true)
-    const mid = Number(id)
+  if (!match) return <div className="p-8 text-gray-500 text-center">Jogo não encontrado.</div>
 
-    if (aba === 'gols') {
-      await supabase.from('match_goals').delete().eq('match_id', mid)
-      const validos = gols.filter(g => g.jogador.trim())
-      if (validos.length) await supabase.from('match_goals').insert(validos.map(g => ({
-        match_id: mid, team_id: Number(g.team_id), jogador: g.jogador.trim(),
-        minuto: g.minuto ? Number(g.minuto) : null, tipo: g.tipo
-      })))
-    }
-
-    if (aba === 'cartoes') {
-      await supabase.from('match_cards').delete().eq('match_id', mid)
-      const validos = cartoes.filter(c => c.jogador.trim())
-      if (validos.length) await supabase.from('match_cards').insert(validos.map(c => ({
-        match_id: mid, team_id: Number(c.team_id), jogador: c.jogador.trim(),
-        minuto: c.minuto ? Number(c.minuto) : null, tipo: c.tipo
-      })))
-    }
-
-    if (aba === 'notas') {
-      // Buscar ou criar jogadores por nome, depois salvar notas
-      await supabase.from('match_ratings').delete().eq('match_id', mid)
-      const { data: org } = await supabase.from('organizations').select('id').eq('slug','divino-tv').single()
-      const validos = notas.filter(n => n.player_nome.trim() && n.nota)
-      for (const n of validos) {
-        // upsert jogador por nome
-        let { data: player } = await supabase.from('players').select('id').eq('nome', n.player_nome.trim()).eq('org_id', org?.id).single()
-        if (!player) {
-          const { data: np } = await supabase.from('players').insert({ nome: n.player_nome.trim(), org_id: org?.id }).select('id').single()
-          player = np
-        }
-        if (player) {
-          await supabase.from('match_ratings').upsert({
-            match_id: mid, player_id: player.id, team_id: Number(n.team_id),
-            nota: Number(n.nota), melhor_jogo: n.melhor_jogo
-          }, { onConflict: 'match_id,player_id' })
-        }
-      }
-      // Melhor do jogo → premiação automática
-      const melhor = validos.find(n => n.melhor_jogo)
-      if (melhor && match) {
-        let { data: player } = await supabase.from('players').select('id').eq('nome', melhor.player_nome.trim()).single()
-        if (player) {
-          await supabase.from('awards').upsert({
-            championship_id: match.championship_id, player_id: player.id, team_id: Number(melhor.team_id),
-            tipo: 'melhor_jogo', match_id: mid, referencia: `Rodada ${match.rodada}`
-          })
-        }
-      }
-    }
-
-    if (aba === 'relatorio') {
-      await supabase.from('match_reports').upsert({
-        match_id: mid,
-        arbitro: report.arbitro || null,
-        publico: report.publico ? Number(report.publico) : null,
-        observacoes: report.observacoes || null
-      }, { onConflict: 'match_id' })
-    }
-
-    setSaving(false); setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-    await carregar()
+  async function salvar(tipo: Aba) {
+    setSalvando(true)
+    await new Promise(r => setTimeout(r, 600))
+    setSalvando(false)
+    setSalvo(tipo)
+    setTimeout(() => setSalvo(null), 2000)
   }
 
-  if (!match) return <div className="flex justify-center pt-24"><span className="animate-spin text-3xl">⚽</span></div>
+  const times = [match.mandante, match.visitante].filter(Boolean)
 
-  const times = [
-    { id: String(match.mandante?.id), nome: match.mandante?.nome },
-    { id: String(match.visitante?.id), nome: match.visitante?.nome },
-  ].filter(t => t.id && t.id !== 'undefined')
-
-  const INPUT_CLASS = "bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-green-400 transition"
-  const SEL_CLASS = `${INPUT_CLASS} cursor-pointer`
-
-  const abas: {key: typeof aba, label:string}[] = [
-    {key:'gols', label:'⚽ Gols'},
-    {key:'cartoes', label:'🟨 Cartões'},
-    {key:'notas', label:'⭐ Notas'},
-    {key:'relatorio', label:'📝 Relatório'},
+  const abas: { key: Aba; icon: string; label: string }[] = [
+    { key: 'placar',    icon: '🏆', label: 'Placar'  },
+    { key: 'gols',      icon: '⚽', label: 'Gols'    },
+    { key: 'cartoes',   icon: '🟨', label: 'Cartões' },
+    { key: 'notas',     icon: '⭐', label: 'Notas'   },
+    { key: 'relatorio', icon: '📝', label: 'Info'    },
   ]
 
   return (
-    <div className="max-w-2xl">
-      <div className="flex items-center gap-3 mb-2">
-        <Link to="/admin/jogos" className="text-gray-400 hover:text-white transition text-sm">← Jogos</Link>
-      </div>
-      <h1 className="text-2xl font-black text-white mb-1">Súmula</h1>
-      <p className="text-gray-400 text-sm mb-6">{match.mandante?.nome} × {match.visitante?.nome} · Rodada {match.rodada}</p>
+    <div className="max-w-2xl mx-auto pb-32">
 
-      <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
+      {/* Cabeçalho */}
+      <div className="px-4 py-4 border-b border-white/5">
+        <div className="text-xs text-gray-600 mb-1">{match.championship?.nome} · Rodada {match.rodada}</div>
+        <h1 className="font-bold text-white text-lg">
+          {match.mandante?.nome} <span className="text-gray-600">vs</span> {match.visitante?.nome}
+        </h1>
+      </div>
+
+      {/* Abas */}
+      <div className="flex overflow-x-auto border-b border-white/5" style={{ scrollbarWidth: 'none' }}>
         {abas.map(a => (
           <button key={a.key} onClick={() => setAba(a.key)}
-            className={`px-4 py-2 rounded-xl text-sm font-bold flex-shrink-0 transition ${
-              aba===a.key ? 'bg-green-500 text-black' : 'bg-white/10 text-gray-300 hover:bg-white/15'
-            }`}>{a.label}</button>
+            className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition whitespace-nowrap ${
+              aba === a.key
+                ? 'border-red-500 text-white'
+                : 'border-transparent text-gray-600 hover:text-gray-400'
+            }`}>
+            <span>{a.icon}</span>
+            <span>{a.label}</span>
+          </button>
         ))}
       </div>
 
-      {/* GOLS */}
-      {aba === 'gols' && (
-        <div>
-          <div className="space-y-2 mb-4">
-            {gols.map((g,i) => (
-              <div key={i} className="flex gap-2 items-center flex-wrap bg-[#111811] border border-white/10 rounded-xl p-3">
+      <div className="px-4 pt-5">
+
+        {/* PLACAR */}
+        {aba === 'placar' && (
+          <div>
+            <p className="text-xs text-gray-600 mb-5 text-center">Ajuste o placar com os botões + e −</p>
+            <div className="flex items-center justify-center gap-6">
+              <div className="flex flex-col items-center gap-3">
+                <div className="text-sm font-bold text-white text-center max-w-24 leading-tight">{match.mandante?.nome}</div>
+                <div className="flex items-center gap-4">
+                  <button onClick={() => setPlacar(p => ({ ...p, gm: Math.max(0, p.gm - 1) }))}
+                    className="w-12 h-12 bg-white/5 hover:bg-white/10 rounded-xl text-xl font-bold text-white transition active:scale-95">−</button>
+                  <span className="font-display text-6xl text-white w-12 text-center">{placar.gm}</span>
+                  <button onClick={() => setPlacar(p => ({ ...p, gm: p.gm + 1 }))}
+                    className="w-12 h-12 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 rounded-xl text-xl font-bold text-red-400 transition active:scale-95">+</button>
+                </div>
+              </div>
+
+              <span className="font-display text-4xl text-gray-700 mb-1">:</span>
+
+              <div className="flex flex-col items-center gap-3">
+                <div className="text-sm font-bold text-white text-center max-w-24 leading-tight">{match.visitante?.nome}</div>
+                <div className="flex items-center gap-4">
+                  <button onClick={() => setPlacar(p => ({ ...p, gv: Math.max(0, p.gv - 1) }))}
+                    className="w-12 h-12 bg-white/5 hover:bg-white/10 rounded-xl text-xl font-bold text-white transition active:scale-95">−</button>
+                  <span className="font-display text-6xl text-white w-12 text-center">{placar.gv}</span>
+                  <button onClick={() => setPlacar(p => ({ ...p, gv: p.gv + 1 }))}
+                    className="w-12 h-12 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 rounded-xl text-xl font-bold text-red-400 transition active:scale-95">+</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* GOLS */}
+        {aba === 'gols' && (
+          <div>
+            {gols.map((g, i) => (
+              <div key={i} className="flex gap-2 mb-3 items-start">
                 <input value={g.jogador} onChange={e => setGols(gols.map((x,j) => j===i?{...x,jogador:e.target.value}:x))}
-                  placeholder="Nome do jogador *" className={`${INPUT_CLASS} flex-1 min-w-32`}/>
-                <select value={g.team_id} onChange={e => setGols(gols.map((x,j) => j===i?{...x,team_id:e.target.value}:x))}
-                  className={SEL_CLASS}>
-                  {times.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+                  placeholder="Nome do jogador"
+                  className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white text-sm outline-none focus:border-red-500 transition" />
+                <select value={g.team?.id || g.team_id} onChange={e => setGols(gols.map((x,j) => j===i?{...x,team_id:Number(e.target.value)}:x))}
+                  className="bg-white/5 border border-white/10 rounded-xl px-2 py-3 text-white text-sm outline-none">
+                  {times.map(t => <option key={t.id} value={t.id}>{t.nome?.slice(0,10)}</option>)}
                 </select>
-                <input type="number" value={g.minuto} onChange={e => setGols(gols.map((x,j) => j===i?{...x,minuto:e.target.value}:x))}
-                  placeholder="Min" className={`${INPUT_CLASS} w-20`}/>
-                <select value={g.tipo} onChange={e => setGols(gols.map((x,j) => j===i?{...x,tipo:e.target.value}:x))}
-                  className={SEL_CLASS}>
-                  <option value="normal">Normal</option>
-                  <option value="penalti">Pênalti</option>
-                  <option value="contra">Contra</option>
+                <input type="number" value={g.minuto||''} onChange={e => setGols(gols.map((x,j) => j===i?{...x,minuto:Number(e.target.value)}:x))}
+                  placeholder="Min" className="w-14 bg-white/5 border border-white/10 rounded-xl px-2 py-3 text-white text-sm text-center outline-none" />
+                <select value={g.tipo||'normal'} onChange={e => setGols(gols.map((x,j) => j===i?{...x,tipo:e.target.value}:x))}
+                  className="bg-white/5 border border-white/10 rounded-xl px-2 py-3 text-white text-sm outline-none">
+                  <option value="normal">⚽</option>
+                  <option value="penalti">P</option>
+                  <option value="contra">CG</option>
                 </select>
-                <button onClick={() => setGols(gols.filter((_,j) => j!==i))} className="text-red-400 hover:text-red-300 text-xl leading-none px-1">×</button>
+                <button onClick={() => setGols(gols.filter((_,j) => j!==i))}
+                  className="p-3 text-red-500 hover:bg-red-500/10 rounded-xl transition text-lg">×</button>
               </div>
             ))}
+            <button onClick={() => setGols([...gols, { jogador:'', team_id: times[0]?.id||1, minuto:'', tipo:'normal' }])}
+              className="w-full py-3 border border-dashed border-white/15 rounded-xl text-green-400 text-sm font-medium hover:border-green-500/30 hover:bg-green-500/5 transition">
+              + Adicionar gol
+            </button>
           </div>
-          <button onClick={() => setGols([...gols, { jogador:'', team_id: times[0]?.id||'', minuto:'', tipo:'normal' }])}
-            className="text-green-400 text-sm font-bold hover:text-green-300 transition mb-6">+ Adicionar gol</button>
-        </div>
-      )}
+        )}
 
-      {/* CARTÕES */}
-      {aba === 'cartoes' && (
-        <div>
-          <div className="space-y-2 mb-4">
-            {cartoes.map((c,i) => (
-              <div key={i} className="flex gap-2 items-center flex-wrap bg-[#111811] border border-white/10 rounded-xl p-3">
+        {/* CARTÕES */}
+        {aba === 'cartoes' && (
+          <div>
+            {cartoes.map((c, i) => (
+              <div key={i} className="flex gap-2 mb-3 items-center">
                 <input value={c.jogador} onChange={e => setCartoes(cartoes.map((x,j) => j===i?{...x,jogador:e.target.value}:x))}
-                  placeholder="Nome do jogador *" className={`${INPUT_CLASS} flex-1 min-w-32`}/>
-                <select value={c.team_id} onChange={e => setCartoes(cartoes.map((x,j) => j===i?{...x,team_id:e.target.value}:x))}
-                  className={SEL_CLASS}>
-                  {times.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+                  placeholder="Nome do jogador"
+                  className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white text-sm outline-none focus:border-red-500 transition" />
+                <select value={c.team?.id || c.team_id} onChange={e => setCartoes(cartoes.map((x,j) => j===i?{...x,team_id:Number(e.target.value)}:x))}
+                  className="bg-white/5 border border-white/10 rounded-xl px-2 py-3 text-white text-sm outline-none">
+                  {times.map(t => <option key={t.id} value={t.id}>{t.nome?.slice(0,10)}</option>)}
                 </select>
-                <input type="number" value={c.minuto} onChange={e => setCartoes(cartoes.map((x,j) => j===i?{...x,minuto:e.target.value}:x))}
-                  placeholder="Min" className={`${INPUT_CLASS} w-20`}/>
+                <input type="number" value={c.minuto||''} onChange={e => setCartoes(cartoes.map((x,j) => j===i?{...x,minuto:Number(e.target.value)}:x))}
+                  placeholder="Min" className="w-14 bg-white/5 border border-white/10 rounded-xl px-2 py-3 text-white text-sm text-center outline-none" />
                 <select value={c.tipo} onChange={e => setCartoes(cartoes.map((x,j) => j===i?{...x,tipo:e.target.value}:x))}
-                  className={SEL_CLASS}>
-                  <option value="amarelo">🟨 Amarelo</option>
-                  <option value="vermelho">🟥 Vermelho</option>
-                  <option value="amarelo_vermelho">🟨🟥 A+V</option>
+                  className="bg-white/5 border border-white/10 rounded-xl px-2 py-3 text-sm outline-none">
+                  <option value="amarelo">🟨</option>
+                  <option value="vermelho">🟥</option>
+                  <option value="amarelo_vermelho">🟨🟥</option>
                 </select>
-                <button onClick={() => setCartoes(cartoes.filter((_,j) => j!==i))} className="text-red-400 hover:text-red-300 text-xl leading-none px-1">×</button>
+                <button onClick={() => setCartoes(cartoes.filter((_,j) => j!==i))}
+                  className="p-3 text-red-500 hover:bg-red-500/10 rounded-xl transition text-lg">×</button>
               </div>
             ))}
+            <button onClick={() => setCartoes([...cartoes, { jogador:'', team_id: times[0]?.id||1, minuto:'', tipo:'amarelo' }])}
+              className="w-full py-3 border border-dashed border-white/15 rounded-xl text-yellow-400 text-sm font-medium hover:border-yellow-500/30 hover:bg-yellow-500/5 transition">
+              + Adicionar cartão
+            </button>
           </div>
-          <button onClick={() => setCartoes([...cartoes, { jogador:'', team_id: times[0]?.id||'', minuto:'', tipo:'amarelo' }])}
-            className="text-green-400 text-sm font-bold hover:text-green-300 transition mb-6">+ Adicionar cartão</button>
-        </div>
-      )}
+        )}
 
-      {/* NOTAS */}
-      {aba === 'notas' && (
-        <div>
-          <p className="text-gray-400 text-sm mb-4">Digite o nome, time e nota (0–10). Marque ⭐ para o melhor do jogo (apenas 1).</p>
-          <div className="space-y-2 mb-4">
-            {notas.map((n,i) => (
-              <div key={i} className="flex gap-2 items-center flex-wrap bg-[#111811] border border-white/10 rounded-xl p-3">
-                <input value={n.player_nome} onChange={e => setNotas(notas.map((x,j) => j===i?{...x,player_nome:e.target.value}:x))}
-                  placeholder="Nome do jogador *" className={`${INPUT_CLASS} flex-1 min-w-32`}/>
-                <select value={n.team_id} onChange={e => setNotas(notas.map((x,j) => j===i?{...x,team_id:e.target.value}:x))}
-                  className={SEL_CLASS}>
-                  {times.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
-                </select>
-                <input type="number" min="0" max="10" step="0.5" value={n.nota}
-                  onChange={e => setNotas(notas.map((x,j) => j===i?{...x,nota:e.target.value}:x))}
-                  placeholder="Nota" className={`${INPUT_CLASS} w-20`}/>
-                <label className="flex items-center gap-1 text-yellow-400 cursor-pointer" title="Melhor do jogo">
-                  <input type="checkbox" checked={!!n.melhor_jogo}
-                    onChange={e => setNotas(notas.map((x,j) => ({...x, melhor_jogo: j===i ? e.target.checked : false})))}
-                    className="accent-yellow-400"/>
-                  ⭐
-                </label>
-                <button onClick={() => setNotas(notas.filter((_,j) => j!==i))} className="text-red-400 hover:text-red-300 text-xl leading-none px-1">×</button>
-              </div>
-            ))}
+        {/* NOTAS */}
+        {aba === 'notas' && (
+          <div>
+            <p className="text-xs text-gray-600 mb-4 text-center">
+              Notas de 0 a 10 · Marque ⭐ o melhor do jogo
+            </p>
+            {notas.map((n, i) => {
+              const notaNum = Number(n.nota) || 0
+              const cor = notaNum >= 8 ? '#00D68F' : notaNum >= 6 ? '#F5B800' : notaNum > 0 ? '#E8232A' : '#3D4055'
+              return (
+                <div key={i} className={`mb-3 p-3 rounded-xl border transition ${n.melhor_jogo?'border-yellow-500/30 bg-yellow-500/5':'border-white/5 bg-white/3'}`}>
+                  <div className="flex items-center gap-3 mb-2">
+                    <input value={n.player_nome||n.player?.nome||''} onChange={e => setNotas(notas.map((x,j) => j===i?{...x,player_nome:e.target.value}:x))}
+                      placeholder="Nome do jogador" className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-red-500 transition" />
+                    <select value={n.team_id} onChange={e => setNotas(notas.map((x,j) => j===i?{...x,team_id:Number(e.target.value)}:x))}
+                      className="bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-white text-sm outline-none">
+                      {times.map(t => <option key={t.id} value={t.id}>{t.nome?.slice(0,10)}</option>)}
+                    </select>
+                    <div className="w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold text-sm flex-shrink-0"
+                      style={{ borderColor: cor, color: cor }}>{notaNum > 0 ? notaNum : '—'}</div>
+                    <button onClick={() => setNotas(notas.filter((_,j) => j!==i))}
+                      className="text-red-500 text-lg p-1">×</button>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <input type="range" min="0" max="10" step="0.5" value={n.nota||0}
+                      onChange={e => setNotas(notas.map((x,j) => j===i?{...x,nota:Number(e.target.value)}:x))}
+                      className="flex-1 accent-red-500" />
+                    <label className="flex items-center gap-1.5 cursor-pointer text-xs text-yellow-400 flex-shrink-0">
+                      <input type="checkbox" checked={!!n.melhor_jogo}
+                        onChange={e => setNotas(notas.map((x,j) => ({...x, melhor_jogo: j===i ? e.target.checked : false})))}
+                        className="accent-yellow-400" />
+                      ⭐ Melhor
+                    </label>
+                  </div>
+                </div>
+              )
+            })}
+            <button onClick={() => setNotas([...notas, { player_nome:'', team_id: times[0]?.id||1, nota:0, melhor_jogo:false }])}
+              className="w-full py-3 border border-dashed border-white/15 rounded-xl text-yellow-400 text-sm font-medium hover:border-yellow-500/30 hover:bg-yellow-500/5 transition">
+              + Adicionar jogador
+            </button>
           </div>
-          <button onClick={() => setNotas([...notas, { player_nome:'', team_id: times[0]?.id||'', nota:'', melhor_jogo:false }])}
-            className="text-green-400 text-sm font-bold hover:text-green-300 transition mb-6">+ Adicionar jogador</button>
-        </div>
-      )}
+        )}
 
-      {/* RELATÓRIO */}
-      {aba === 'relatorio' && (
-        <div className="bg-[#111811] border border-white/10 rounded-2xl p-5 space-y-3 mb-6">
-          <input value={report.arbitro} onChange={e => setReport({...report, arbitro:e.target.value})}
-            placeholder="Árbitro" className={`w-full ${INPUT_CLASS}`}/>
-          <input type="number" value={report.publico} onChange={e => setReport({...report, publico:e.target.value})}
-            placeholder="Público presente" className={`w-full ${INPUT_CLASS}`}/>
-          <textarea value={report.observacoes} onChange={e => setReport({...report, observacoes:e.target.value})}
-            placeholder="Observações gerais do jogo..." rows={4}
-            className={`w-full ${INPUT_CLASS} resize-none`}/>
-        </div>
-      )}
+        {/* RELATÓRIO */}
+        {aba === 'relatorio' && (
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs text-gray-500 uppercase tracking-wider mb-2 block">Árbitro</label>
+              <input value={relatorio.arbitro} onChange={e => setRelatorio({...relatorio, arbitro: e.target.value})}
+                placeholder="Nome do árbitro"
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-red-500 transition" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 uppercase tracking-wider mb-2 block">Público presente</label>
+              <input type="number" value={relatorio.publico} onChange={e => setRelatorio({...relatorio, publico: e.target.value})}
+                placeholder="Número de pessoas"
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-red-500 transition" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 uppercase tracking-wider mb-2 block">Observações da narração</label>
+              <textarea value={relatorio.observacoes} onChange={e => setRelatorio({...relatorio, observacoes: e.target.value})}
+                placeholder="Como foi o jogo? Destaques, polêmicas, contexto..."
+                rows={5}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-red-500 transition resize-none" />
+            </div>
+          </div>
+        )}
+      </div>
 
-      <button onClick={salvar} disabled={saving}
-        className={`w-full font-bold py-3 rounded-xl transition ${saved ? 'bg-green-400 text-black' : 'bg-green-500 hover:bg-green-400 text-black'} disabled:opacity-50`}>
-        {saving ? 'Salvando...' : saved ? '✅ Salvo!' : `Salvar ${aba === 'gols' ? 'gols' : aba === 'cartoes' ? 'cartões' : aba === 'notas' ? 'notas' : 'relatório'}`}
-      </button>
+      {/* Botão salvar fixo no bottom */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#060608]/95 backdrop-blur-sm border-t border-white/5">
+        <button onClick={() => salvar(aba)} disabled={salvando}
+          className={`w-full py-4 rounded-xl text-sm font-bold transition ${
+            salvo === aba
+              ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+              : 'bg-[#E8232A] text-white hover:bg-[#B01B21]'
+          } disabled:opacity-60`}>
+          {salvando ? 'Salvando...' : salvo === aba ? '✓ Salvo!' : `Salvar ${abas.find(a=>a.key===aba)?.label}`}
+        </button>
+      </div>
     </div>
   )
 }
