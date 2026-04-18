@@ -38,7 +38,8 @@ export default function App() {
           <Route path="/admin/jogos"       element={<AdminLayout><AdminJogos /></AdminLayout>} />
           <Route path="/admin/jogos/:id/sumula" element={<AdminLayout><AdminSumula /></AdminLayout>} />
           <Route path="/admin/narracao" element={<AdminLayout><AdminNarracao /></AdminLayout>} />
-          <Route path="/admin/transmissao" element={<AdminLayout><AdminTransmissao /></AdminLayout>} />
+          <Route path="/admin/transmissao"     element={<AdminLayout><AdminTransmissao /></AdminLayout>} />
+          <Route path="/admin/transmissao/:id" element={<AdminLayout><AdminTransmissao /></AdminLayout>} />
           <Route path="/admin/stats" element={<AdminLayout><AdminStats /></AdminLayout>} />
           <Route path="/divino-league" element={<DivinoLeague />} />
         </Routes>

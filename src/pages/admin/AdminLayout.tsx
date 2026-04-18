@@ -3,12 +3,11 @@ import { useNavigate, Link, useLocation } from 'react-router-dom'
 
 const NAV = [
   { to:'/admin',              label:'📊 Dashboard'   },
-  { to:'/admin/narracao',     label:'🎙️ Narração'    },
-  { to:'/admin/transmissao',  label:'🔴 Transmissão' },
+  { to:'/admin/transmissao',  label:'🎙️ Narração'    },
+  { to:'/admin/jogos',        label:'⚽ Jogos'        },
   { to:'/admin/campeonatos',  label:'🏆 Campeonatos' },
   { to:'/admin/times',        label:'👕 Times'        },
-  { to:'/admin/jogos',        label:'⚽ Jogos'        },
-  { to:'/admin/stats',        label:'📊 Estatísticas' },
+  { to:'/admin/stats',        label:'📈 Estatísticas' },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

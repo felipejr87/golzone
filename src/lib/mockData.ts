@@ -1038,3 +1038,12 @@ export const ESCALACOES: Record<number, EscalacaoJogador[]> = {
 export function getMock<T>(key: keyof typeof MOCK_DATA): T {
   return MOCK_DATA[key] as T
 }
+
+export function mockJogadoresPorTime(teamId?: number) {
+  if (!teamId) return []
+  const time = MOCK_DATA.times.find(t => t.id === teamId)
+  if (!time) return []
+  return MOCK_DATA.jogadores
+    .filter(j => j.time === time.nome)
+    .map(j => ({ ...j, team_id: teamId }))
+}

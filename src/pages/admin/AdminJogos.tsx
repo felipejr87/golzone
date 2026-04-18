@@ -13,10 +13,6 @@ export default function AdminJogos() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-black text-white">Jogos</h1>
-        <Link to="/admin/narracao"
-          className="bg-[#E8232A] hover:bg-[#B01B21] text-white font-bold px-4 py-2 rounded-xl text-sm transition flex items-center gap-2">
-          🎙️ Narrar
-        </Link>
       </div>
 
       <div className="mb-4">
@@ -56,12 +52,14 @@ export default function AdminJogos() {
                 className="text-xs bg-white/10 hover:bg-white/15 text-gray-300 font-bold px-3 py-1.5 rounded-lg transition">
                 👁️ Ver jogo
               </Link>
-              {j.status !== 'finalizado' && (
-                <Link to="/admin/narracao"
-                  className="text-xs bg-[#E8232A]/15 hover:bg-[#E8232A]/25 text-[#E8232A] font-bold px-3 py-1.5 rounded-lg transition">
-                  🎙️ Narrar este jogo
-                </Link>
-              )}
+              <Link to={`/admin/jogos/${j.id}/sumula`}
+                className="text-xs bg-white/8 hover:bg-white/15 text-gray-400 font-bold px-3 py-1.5 rounded-lg transition">
+                📋 Súmula
+              </Link>
+              <Link to={`/admin/transmissao/${j.id}`}
+                className="flex items-center gap-1 text-xs bg-red-500/15 text-red-400 border border-red-500/20 px-3 py-1.5 rounded-lg font-medium hover:bg-red-500/25 transition">
+                <span>🎙️</span> Narrar
+              </Link>
             </div>
           </div>
         ))}
