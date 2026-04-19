@@ -11,58 +11,105 @@ export default function AdminJogos() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-black text-white">Jogos</h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--t-1)', margin: 0 }}>Jogos</h1>
       </div>
 
-      <div className="mb-4">
+      <div style={{ marginBottom: 16 }}>
         <select value={filtro} onChange={e => setFiltro(Number(e.target.value))}
-          className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm outline-none w-full">
+          style={{
+            width: '100%', background: 'var(--bg-card-2)', border: '0.5px solid var(--b-1)',
+            borderRadius: 'var(--r-lg)', padding: '10px 14px',
+            color: 'var(--t-1)', fontSize: 14, outline: 'none',
+            fontFamily: 'var(--font-body)',
+          }}>
           <option value={0}>Todos os campeonatos</option>
           {MOCK_DATA.campeonatos.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
         </select>
       </div>
 
-      <div className="space-y-2">
-        {jogos.map(j => (
-          <div key={j.id} className="bg-[#111811] border border-white/10 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-gray-500">{j.championship?.nome} · Rodada {j.rodada}</span>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                j.status === 'finalizado'   ? 'bg-green-500/20 text-green-400' :
-                j.status === 'em_andamento' ? 'bg-red-500/20 text-red-400' :
-                'bg-white/10 text-gray-400'
-              }`}>{j.status}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {jogos.map(j => {
+          const isDone = j.status === 'finalizado'
+          const isLive = j.status === 'em_andamento'
+          return (
+            <div key={j.id} style={{
+              background: 'var(--bg-card)', border: `0.5px solid ${isLive ? 'var(--red-border)' : 'var(--b-1)'}`,
+              borderRadius: 'var(--r-lg)', padding: '14px 16px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <span style={{ fontSize: 11, color: 'var(--t-3)', fontFamily: 'var(--font-body)' }}>
+                  {j.championship?.nome} · Rodada {j.rodada}
+                </span>
+                <span style={{
+                  fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 100,
+                  fontFamily: 'var(--font-body)', textTransform: 'uppercase', letterSpacing: '0.06em',
+                  background: isDone ? 'rgba(74,80,104,0.2)' : isLive ? 'var(--red-dim)' : 'rgba(75,159,255,0.1)',
+                  color: isDone ? 'var(--t-3)' : isLive ? 'var(--red)' : '#60A5FA',
+                }}>
+                  {isDone ? 'Encerrado' : isLive ? '● Ao vivo' : 'Agendado'}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <span style={{ fontWeight: 700, color: 'var(--t-1)', flex: 1, fontSize: 14, fontFamily: 'var(--font-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {j.mandante?.nome}
+                </span>
+                <span style={{ fontWeight: 800, color: 'var(--t-1)', flexShrink: 0, textAlign: 'center', minWidth: 80, fontFamily: 'var(--font-display)', fontSize: 20 }}>
+                  {isDone || isLive
+                    ? `${j.resultado?.gols_mandante ?? 0} : ${j.resultado?.gols_visitante ?? 0}`
+                    : j.data_hora
+                      ? new Date(j.data_hora).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+                      : 'vs'
+                  }
+                </span>
+                <span style={{ fontWeight: 700, color: 'var(--t-1)', flex: 1, fontSize: 14, fontFamily: 'var(--font-body)', textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {j.visitante?.nome}
+                </span>
+              </div>
+
+              {j.local && (
+                <p style={{ fontSize: 11, color: 'var(--t-3)', marginBottom: 10, textAlign: 'center', fontFamily: 'var(--font-body)' }}>
+                  📍 {j.local}
+                </p>
+              )}
+
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <Link to={`/m/${j.id}`} target="_blank" style={{
+                  fontSize: 12, fontWeight: 600, padding: '7px 12px', borderRadius: 'var(--r-sm)',
+                  background: 'var(--bg-card-2)', border: '0.5px solid var(--b-1)',
+                  color: 'var(--t-2)', textDecoration: 'none', fontFamily: 'var(--font-body)',
+                }}>
+                  👁️ Ver jogo
+                </Link>
+                <Link to={`/admin/jogos/${j.id}/sumula`} style={{
+                  fontSize: 12, fontWeight: 600, padding: '7px 12px', borderRadius: 'var(--r-sm)',
+                  background: 'var(--bg-card-2)', border: '0.5px solid var(--b-1)',
+                  color: 'var(--t-2)', textDecoration: 'none', fontFamily: 'var(--font-body)',
+                }}>
+                  📋 Súmula
+                </Link>
+                {!isDone ? (
+                  <Link to={`/admin/narracao/${j.id}`} style={{
+                    fontSize: 12, fontWeight: 700, padding: '7px 12px', borderRadius: 'var(--r-sm)',
+                    background: 'var(--red-dim)', border: '0.5px solid var(--red-border)',
+                    color: 'var(--red)', textDecoration: 'none', fontFamily: 'var(--font-body)',
+                    display: 'flex', alignItems: 'center', gap: 4,
+                  }}>
+                    {isLive ? '🔴 Continuar narração' : '🎙️ Narrar jogo'}
+                  </Link>
+                ) : (
+                  <Link to={`/m/${j.id}`} style={{
+                    fontSize: 12, color: 'var(--t-3)', textDecoration: 'none',
+                    padding: '7px 12px', fontFamily: 'var(--font-body)',
+                  }}>
+                    Ver resultado →
+                  </Link>
+                )}
+              </div>
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="font-bold text-white flex-1 truncate">{j.mandante?.nome}</span>
-              <span className="font-black text-white px-3 flex-shrink-0 text-center min-w-[80px]">
-                {j.status === 'finalizado'
-                  ? `${j.resultado?.gols_mandante} × ${j.resultado?.gols_visitante}`
-                  : j.data_hora
-                    ? new Date(j.data_hora).toLocaleDateString('pt-BR', { day:'2-digit', month:'short' })
-                    : 'vs'
-                }
-              </span>
-              <span className="font-bold text-white flex-1 text-right truncate">{j.visitante?.nome}</span>
-            </div>
-            {j.local && <p className="text-xs text-gray-500 mt-1 text-center">📍 {j.local}</p>}
-            <div className="flex gap-2 mt-3 flex-wrap">
-              <Link to={`/m/${j.id}`} target="_blank"
-                className="text-xs bg-white/10 hover:bg-white/15 text-gray-300 font-bold px-3 py-1.5 rounded-lg transition">
-                👁️ Ver jogo
-              </Link>
-              <Link to={`/admin/jogos/${j.id}/sumula`}
-                className="text-xs bg-white/8 hover:bg-white/15 text-gray-400 font-bold px-3 py-1.5 rounded-lg transition">
-                📋 Súmula
-              </Link>
-              <Link to={`/admin/jogo/${j.id}`}
-                className="flex items-center gap-1 text-xs bg-red-500/15 text-red-400 border border-red-500/20 px-3 py-1.5 rounded-lg font-medium hover:bg-red-500/25 transition">
-                <span>🎙️</span> Narrar
-              </Link>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

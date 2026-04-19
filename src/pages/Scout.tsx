@@ -82,44 +82,61 @@ export default function Scout() {
 
 function ScoutCard({ jogador, rank }: { jogador: JogadorStat; rank: number }) {
   const nota = Number(jogador.nota_media)
-  const cor  = nota >= 8 ? '#00D68F' : nota >= 6 ? '#F5B800' : '#8B8FA8'
-  const bg   = nota >= 8 ? 'from-[#003D24]' : nota >= 6 ? 'from-[#2A2000]' : 'from-[#0E0F15]'
+  const cor  = nota >= 8 ? 'var(--green)' : nota >= 6 ? 'var(--yellow)' : 'var(--t-2)'
+  const medalha = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : null
 
   return (
-    <Link to={`/p/${jogador.id}`}
-      className={`flex items-center gap-4 p-4 bg-gradient-to-r ${bg} to-[#0E0F15] rounded-2xl border border-white/5 hover:border-[#E8232A]/30 transition-all`}>
-      <div className={`w-8 text-center font-display text-xl ${rank <= 3 ? 'text-[#F5B800]' : 'text-gray-700'}`}>
-        {rank}
-      </div>
-      <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center flex-shrink-0 overflow-hidden">
-        <span className="text-2xl">👤</span>
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="font-bold text-white truncate">{jogador.apelido || jogador.nome}</div>
-        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-          {jogador.posicao && (
-            <span className="text-xs text-gray-500 capitalize">{jogador.posicao}</span>
-          )}
-          <span className="text-gray-700">·</span>
-          <span className="text-xs text-gray-500">{jogador.jogos} avaliações</span>
-          {jogador.melhor_jogo_count > 0 && (
-            <>
-              <span className="text-gray-700">·</span>
-              <span className="text-xs text-yellow-500">⭐ {jogador.melhor_jogo_count}×</span>
-            </>
+    <Link to={`/p/${jogador.id}`} style={{ textDecoration: 'none', display: 'block' }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
+        background: 'var(--bg-card)', border: '0.5px solid var(--b-1)',
+        borderRadius: 'var(--r-lg)', transition: 'border-color 0.15s',
+      }}>
+        {/* Posição */}
+        <div style={{ width: 28, textAlign: 'center', flexShrink: 0 }}>
+          {medalha ? (
+            <span style={{ fontSize: 20 }}>{medalha}</span>
+          ) : (
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--t-3)' }}>{rank}</span>
           )}
         </div>
-      </div>
-      <div className="flex items-center gap-4 flex-shrink-0">
-        {jogador.gols_total > 0 && (
-          <div className="text-center">
-            <div className="font-bold text-white text-sm">{jogador.gols_total}</div>
-            <div className="text-xs text-gray-600">gols</div>
+
+        {/* Avatar com cor da nota */}
+        <div style={{
+          width: 44, height: 44, borderRadius: '50%', flexShrink: 0,
+          background: `${cor}15`, border: `1.5px solid ${cor}30`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: cor,
+        }}>
+          {(jogador.apelido || jogador.nome).slice(0, 2).toUpperCase()}
+        </div>
+
+        {/* Info */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--font-body)' }}>
+            {jogador.apelido || jogador.nome}
           </div>
-        )}
-        <div className="w-12 h-12 rounded-full border-2 flex items-center justify-center font-bold text-sm"
-          style={{ borderColor: cor, color: cor }}>
-          {jogador.nota_media}
+          <div style={{ display: 'flex', gap: 8, marginTop: 3, flexWrap: 'wrap' }}>
+            {jogador.posicao && (
+              <span style={{ fontSize: 11, color: 'var(--t-3)', textTransform: 'capitalize', fontFamily: 'var(--font-body)' }}>{jogador.posicao}</span>
+            )}
+            <span style={{ fontSize: 11, color: 'var(--t-3)', fontFamily: 'var(--font-body)' }}>{jogador.jogos} jogos</span>
+            {jogador.gols_total > 0 && (
+              <span style={{ fontSize: 11, color: 'var(--green)', fontFamily: 'var(--font-body)' }}>⚽ {jogador.gols_total}</span>
+            )}
+            {jogador.melhor_jogo_count > 0 && (
+              <span style={{ fontSize: 11, color: 'var(--yellow)', fontFamily: 'var(--font-body)' }}>⭐ {jogador.melhor_jogo_count}×</span>
+            )}
+          </div>
+        </div>
+
+        {/* Nota circular */}
+        <div style={{
+          width: 48, height: 48, borderRadius: '50%', flexShrink: 0,
+          border: `2px solid ${cor}`, background: `${cor}10`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: cor }}>{jogador.nota_media}</span>
         </div>
       </div>
     </Link>

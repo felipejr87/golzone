@@ -7,7 +7,7 @@ import { MvpCard } from '../components/player/MvpCard'
 import { PlayerRankRow } from '../components/player/PlayerRankRow'
 import { Badge } from '../components/ui/Badge'
 
-type Aba = 'sumula' | 'notas' | 'info'
+type Aba = 'sumula' | 'notas' | 'cartola' | 'info'
 
 export default function Match() {
   const { id } = useParams()
@@ -20,6 +20,21 @@ export default function Match() {
   const isDone = match.status === 'finalizado'
   const melhor = match.notas?.find((n: any) => n.melhor_jogo)
   const notasOrdenadas = [...(match.notas || [])].sort((a: any, b: any) => b.nota - a.nota)
+
+  const matchGols = match!.gols || []
+  const matchNotas = match!.notas || []
+
+  function calcPontos(nota: any): number {
+    const playerNome = nota.player?.nome || ''
+    const gols = matchGols.filter((g: any) => g.jogador === playerNome && g.tipo !== 'contra').length
+    const notaBonus = nota.nota ? Math.round((Number(nota.nota) - 5) * 2) : 0
+    const mvp = nota.melhor_jogo ? 5 : 0
+    return gols * 8 + notaBonus + mvp
+  }
+
+  const rankingCartola = [...matchNotas]
+    .map((n: any) => ({ ...n, pts: calcPontos(n) }))
+    .sort((a: any, b: any) => b.pts - a.pts)
 
   return (
     <div style={{ maxWidth: 640, margin: '0 auto', paddingBottom: 80 }}>
@@ -102,7 +117,12 @@ export default function Match() {
         display: 'flex', borderBottom: '0.5px solid var(--sep)',
         padding: '0 16px', marginTop: 12,
       }}>
-        {([['sumula', 'Súmula'], ['notas', 'Notas'], ['info', 'Info']] as const).map(([k, l]) => (
+        {([
+          ['sumula', 'Súmula'],
+          ['notas',  'Notas'],
+          ...(isDone ? [['cartola', 'Pontuação']] : []),
+          ['info',   'Info'],
+        ] as [Aba, string][]).map(([k, l]) => (
           <button key={k} onClick={() => setAba(k)} style={{
             flex: 1, padding: '12px 0', background: 'none', border: 'none',
             borderBottom: aba === k ? '2px solid var(--divino-red)' : '2px solid transparent',
@@ -164,6 +184,107 @@ export default function Match() {
               </div>
             ) : (
               <EmptyMsg>Notas ainda não disponíveis.</EmptyMsg>
+            )}
+          </div>
+        )}
+
+        {aba === 'cartola' && isDone && (
+          <div>
+            {/* Legenda */}
+            <div style={{
+              background: 'var(--bg-card)', border: '0.5px solid var(--sep)',
+              borderRadius: 'var(--r-lg)', padding: '12px 16px', marginBottom: 16,
+              display: 'flex', alignItems: 'center', gap: 12,
+            }}>
+              <span style={{ fontSize: 22 }}>⭐</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-body)' }}>
+                  Pontuação DivinoTV
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>
+                  Gol=8pts · Nota±2/pt · MVP=+5 · Amarelo=−2 · Vermelho=−5
+                </div>
+              </div>
+            </div>
+
+            {/* MVP destaque */}
+            {melhor && (
+              <div style={{
+                background: 'linear-gradient(90deg,rgba(245,184,0,0.08),transparent)',
+                border: '0.5px solid rgba(245,184,0,0.25)',
+                borderRadius: 'var(--r-lg)', padding: '14px 16px',
+                display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16,
+              }}>
+                <span style={{ fontSize: 28 }}>🏆</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 10, color: 'var(--yellow)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-body)' }}>
+                    MVP · Melhor do Jogo
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-body)' }}>
+                    {(melhor.player as any)?.apelido || melhor.player?.nome}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 36, color: 'var(--yellow)', lineHeight: 1 }}>
+                    {calcPontos(melhor)}
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>pts</div>
+                </div>
+              </div>
+            )}
+
+            {/* Ranking */}
+            {rankingCartola.length > 0 ? (
+              <div>
+                {rankingCartola.map((n: any, idx: number) => {
+                  const pts: number = n.pts
+                  const golsJog = matchGols.filter((g: any) => g.jogador === n.player?.nome && g.tipo !== 'contra').length
+                  const ptsCor = pts >= 20 ? 'var(--green)' : pts >= 5 ? 'var(--yellow)' : pts < 0 ? 'var(--red)' : 'var(--text-secondary)'
+                  return (
+                    <Link key={n.id} to={`/p/${n.player?.id || 0}`} style={{ textDecoration: 'none', display: 'block' }}>
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 12,
+                        padding: '10px 0', borderBottom: '0.5px solid var(--sep)',
+                      }}>
+                        <span style={{
+                          fontFamily: 'var(--font-display)', fontSize: 18,
+                          color: idx === 0 ? 'var(--yellow)' : idx === 1 ? 'var(--text-secondary)' : idx === 2 ? '#CD7F32' : 'var(--text-muted)',
+                          width: 24, textAlign: 'center', flexShrink: 0,
+                        }}>{idx + 1}</span>
+                        <div style={{
+                          width: 36, height: 36, borderRadius: '50%',
+                          background: 'var(--bg-card)', display: 'flex', alignItems: 'center',
+                          justifyContent: 'center', fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', flexShrink: 0,
+                        }}>
+                          {(n.player?.nome || '?').slice(0, 2).toUpperCase()}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {(n.player as any)?.apelido || n.player?.nome}
+                          </div>
+                          <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+                            {golsJog > 0 && <span style={{ fontSize: 11, color: 'var(--green)', fontFamily: 'var(--font-body)' }}>⚽ {golsJog}</span>}
+                            {n.melhor_jogo && <span style={{ fontSize: 11, color: 'var(--yellow)', fontFamily: 'var(--font-body)' }}>⭐ MVP</span>}
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>Nota {n.nota}</span>
+                          </div>
+                        </div>
+                        <div style={{
+                          padding: '6px 12px', borderRadius: 'var(--r-md)', flexShrink: 0,
+                          background: pts >= 0 ? 'rgba(74,222,128,0.08)' : 'rgba(232,35,42,0.08)',
+                          border: `0.5px solid ${pts >= 0 ? 'rgba(74,222,128,0.2)' : 'rgba(232,35,42,0.2)'}`,
+                        }}>
+                          <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, color: ptsCor, lineHeight: 1 }}>
+                            {pts > 0 ? '+' : ''}{pts}
+                          </div>
+                          <div style={{ fontSize: 9, color: 'var(--text-muted)', textAlign: 'center', fontFamily: 'var(--font-body)' }}>pts</div>
+                        </div>
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
+            ) : (
+              <EmptyMsg>Pontuação não disponível.</EmptyMsg>
             )}
           </div>
         )}
