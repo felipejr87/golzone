@@ -97,6 +97,12 @@ export default function AdminNarracao() {
     setJogadorSheet(null)
   }
 
+  function iniciarPartida() {
+    setFase('primeiro')
+    setMinuto(1)
+    addEvento('inicio','🟢 Partida iniciada!')
+  }
+
   async function gerarEscalacao() {
     setGerando(true)
     setView('escalacao')
@@ -147,15 +153,106 @@ Isso foi Divino App! Futebol de verdade! 🎙️⚽`.trim())
     setGerando(false)
   }
 
-  const FASES_BTN: Record<Fase, { label: string; cor: string; txtCor: string; next: () => void }> = {
-    pre:       { label:'▶ Iniciar partida',  cor:'var(--green)',  txtCor:'#000', next: () => { setFase('primeiro'); setMinuto(1); addEvento('inicio','🟢 Partida iniciada!') }},
-    primeiro:  { label:'⏸ Intervalo',        cor:'var(--yellow)', txtCor:'#000', next: () => { setFase('intervalo'); if (timer.current) clearInterval(timer.current); addEvento('intervalo','⏸ Intervalo') }},
-    intervalo: { label:'▶ 2º Tempo',          cor:'var(--green)',  txtCor:'#000', next: () => { setFase('segundo'); setMinuto(46); addEvento('inicio','▶ Segundo tempo iniciado') }},
-    segundo:   { label:'🏁 Encerrar',         cor:'var(--red)',    txtCor:'#fff', next: () => { setFase('encerrado'); if (timer.current) clearInterval(timer.current); addEvento('fim','🏁 Jogo encerrado') }},
-    encerrado: { label:'🎙️ Gerar Escalação',  cor:'var(--t-2)',    txtCor:'#000', next: gerarEscalacao },
+  /* ── PRÉ-JOGO LOBBY ── */
+  if (fase === 'pre') {
+    return (
+      <div style={{ background:'var(--bg-base)', minHeight:'100vh', display:'flex', flexDirection:'column' }}>
+        {/* Top bar */}
+        <div style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', borderBottom:'0.5px solid var(--b-1)', background:'rgba(6,6,8,0.97)' }}>
+          <button onClick={() => navigate('/admin/jogos')} style={{ background:'none', border:'none', color:'var(--t-3)', fontSize:22, cursor:'pointer', padding:0, lineHeight:1 }}>←</button>
+          <span style={{ fontSize:13, fontWeight:700, color:'var(--t-2)', textTransform:'uppercase', letterSpacing:'0.08em' }}>Pré-Jogo</span>
+        </div>
+
+        <div style={{ flex:1, overflowY:'auto', padding:16 }}>
+
+          {/* Match card */}
+          <div style={{ background:'var(--bg-card)', border:'0.5px solid var(--b-1)', borderRadius:'var(--r-xl)', padding:'20px 16px', marginBottom:20 }}>
+            <div style={{ fontSize:11, color:'var(--t-3)', textAlign:'center', marginBottom:12, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.06em' }}>
+              {jogo.championship?.nome} · Rodada {jogo.rodada}
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <div style={{ flex:1, textAlign:'center' }}>
+                <div style={{ fontSize:15, fontWeight:700, color:'var(--t-1)', lineHeight:1.3 }}>{jogo.mandante?.nome}</div>
+                <div style={{ fontSize:11, color:'var(--t-3)', marginTop:4 }}>Mandante</div>
+              </div>
+              <div style={{ padding:'10px 18px', background:'var(--bg-card-2)', borderRadius:'var(--r-lg)', textAlign:'center', flexShrink:0 }}>
+                <div style={{ fontFamily:'var(--font-display)', fontSize:28, color:'var(--t-1)', letterSpacing:'0.04em' }}>VS</div>
+              </div>
+              <div style={{ flex:1, textAlign:'center' }}>
+                <div style={{ fontSize:15, fontWeight:700, color:'var(--t-1)', lineHeight:1.3 }}>{jogo.visitante?.nome}</div>
+                <div style={{ fontSize:11, color:'var(--t-3)', marginTop:4 }}>Visitante</div>
+              </div>
+            </div>
+            {jogo.local && (
+              <div style={{ textAlign:'center', marginTop:12, fontSize:12, color:'var(--t-3)' }}>📍 {jogo.local}</div>
+            )}
+          </div>
+
+          {/* Elencos */}
+          <div style={{ display:'flex', gap:10, marginBottom:20 }}>
+            {[
+              { time: jogo.mandante?.nome, jogs: mandJogs, label:'Mandante' },
+              { time: jogo.visitante?.nome, jogs: visitJogs, label:'Visitante' },
+            ].map(({ time, jogs }) => (
+              <div key={time} style={{ flex:1, background:'var(--bg-card)', border:'0.5px solid var(--b-1)', borderRadius:'var(--r-lg)', padding:12 }}>
+                <div style={{ fontSize:11, fontWeight:700, color:'var(--t-3)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>{time}</div>
+                {(jogs as any[]).slice(0, 7).map((jog: any) => (
+                  <div key={jog.id} style={{ display:'flex', alignItems:'center', gap:6, padding:'4px 0', borderBottom:'0.5px solid var(--b-1)' }}>
+                    <span style={{ fontSize:10, color:'var(--t-3)', textTransform:'capitalize', width:44, flexShrink:0 }}>{jog.posicao?.slice(0,3)}</span>
+                    <span style={{ fontSize:12, color:'var(--t-1)', fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{jog.apelido || jog.nome}</span>
+                  </div>
+                ))}
+                {(jogs as any[]).length === 0 && <div style={{ fontSize:11, color:'var(--t-3)' }}>Sem elenco</div>}
+                {(jogs as any[]).length > 7 && <div style={{ fontSize:10, color:'var(--t-3)', marginTop:4 }}>+{(jogs as any[]).length - 7} mais</div>}
+              </div>
+            ))}
+          </div>
+
+          {/* Estatísticas resumo */}
+          <div style={{ background:'var(--bg-card)', border:'0.5px solid var(--b-1)', borderRadius:'var(--r-lg)', padding:14, marginBottom:24 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:'var(--t-3)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>Elencos</div>
+            <div style={{ display:'flex', justifyContent:'space-around' }}>
+              {[
+                { label:'Jogadores', val: todosJogs.length },
+                { label: jogo.mandante?.nome ?? 'Mandante', val: mandJogs.length },
+                { label: jogo.visitante?.nome ?? 'Visitante', val: visitJogs.length },
+              ].map(({ label, val }) => (
+                <div key={label} style={{ textAlign:'center' }}>
+                  <div style={{ fontFamily:'var(--font-display)', fontSize:28, color:'var(--t-1)' }}>{val}</div>
+                  <div style={{ fontSize:10, color:'var(--t-3)', marginTop:2 }}>{label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Big CTA */}
+        <div style={{ padding:'16px 16px calc(16px + env(safe-area-inset-bottom,0px))', background:'rgba(6,6,8,0.97)', borderTop:'0.5px solid var(--b-1)' }}>
+          <button onClick={iniciarPartida} style={{
+            width:'100%', padding:'18px', borderRadius:'var(--r-xl)',
+            background:'var(--green)', color:'#000',
+            border:'none', fontSize:17, fontWeight:800, cursor:'pointer',
+            letterSpacing:'0.03em', display:'flex', alignItems:'center', justifyContent:'center', gap:10,
+          }}>
+            <span style={{ fontSize:22 }}>▶</span> Iniciar Partida
+          </button>
+          <p style={{ textAlign:'center', fontSize:11, color:'var(--t-3)', marginTop:8, margin:'8px 0 0' }}>
+            {mandJogs.length + visitJogs.length} jogadores cadastrados · Você poderá registrar eventos durante o jogo
+          </p>
+        </div>
+      </div>
+    )
   }
 
-  const btn = FASES_BTN[fase]
+  /* ── FASE ATIVA / ENCERRADO ── */
+  const FASES_BTN: Record<Exclude<Fase,'pre'>, { label: string; cor: string; txtCor: string; next: () => void }> = {
+    primeiro:  { label:'⏸ Intervalo',       cor:'var(--yellow)', txtCor:'#000', next: () => { setFase('intervalo'); if (timer.current) clearInterval(timer.current); addEvento('intervalo','⏸ Intervalo') }},
+    intervalo: { label:'▶ 2º Tempo',         cor:'var(--green)',  txtCor:'#000', next: () => { setFase('segundo'); setMinuto(46); addEvento('inicio','▶ Segundo tempo iniciado') }},
+    segundo:   { label:'🏁 Encerrar',        cor:'var(--red)',    txtCor:'#fff', next: () => { setFase('encerrado'); if (timer.current) clearInterval(timer.current); addEvento('fim','🏁 Jogo encerrado') }},
+    encerrado: { label:'🎙️ Gerar Escalação', cor:'var(--t-2)',    txtCor:'#000', next: gerarEscalacao },
+  }
+
+  const btn = FASES_BTN[fase as Exclude<Fase,'pre'>]
 
   return (
     <div style={{ background:'var(--bg-base)', minHeight:'100vh', maxWidth:480, margin:'0 auto', display:'flex', flexDirection:'column' }}>
@@ -166,21 +263,14 @@ Isso foi Divino App! Futebol de verdade! 🎙️⚽`.trim())
         background:'rgba(7,8,12,0.97)', backdropFilter:'blur(16px)',
         borderBottom:'0.5px solid var(--b-1)',
       }}>
-        {/* Linha 1 */}
+        {/* Linha 1: status + minuto */}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px 6px' }}>
-          {!emJogo ? (
-            <button onClick={() => navigate(`/admin/jogo/${id}`)}
-              style={{ background:'none', border:'none', color:'var(--t-2)', fontSize:13, cursor:'pointer', padding:'4px 0' }}>
-              ← Voltar
-            </button>
-          ) : (
-            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-              <span className="live-dot"/>
-              <span style={{ fontSize:11, color:'var(--red)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em' }}>
-                Narração ativa
-              </span>
-            </div>
-          )}
+          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+            {emJogo && <span style={{ width:8, height:8, borderRadius:'50%', background:'var(--red)', display:'inline-block', animation:'pulse 1.5s infinite' }} />}
+            <span style={{ fontSize:11, color: emJogo ? 'var(--red)' : 'var(--t-3)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em' }}>
+              {fase === 'intervalo' ? 'Intervalo' : fase === 'encerrado' ? 'Encerrado' : 'Narração ativa'}
+            </span>
+          </div>
           <span style={{ fontSize:13, color:'var(--t-2)', fontFamily:'var(--font-display)', letterSpacing:'0.04em' }}>
             {String(minuto).padStart(2,'0')}'
             {acrescimo > 0 && <span style={{ color:'var(--yellow)' }}> +{acrescimo}</span>}
@@ -196,9 +286,9 @@ Isso foi Divino App! Futebol de verdade! 🎙️⚽`.trim())
             <Ctrl onClick={() => setGm(g => Math.max(0, g-1))} symbol="−" dim />
             <button onClick={() => { setGm(g => g+1); addEvento('gol',`⚽ GOL! ${jogo.mandante?.nome}`) }}
               style={{ width:30, height:30, background:'var(--red-dim)', border:'0.5px solid var(--red-border)', borderRadius:'var(--r-sm)', color:'var(--red)', fontSize:18, cursor:'pointer', fontWeight:700 }}>+</button>
-            <span className="display" style={{ fontSize:36, color:'var(--t-1)', minWidth:22, textAlign:'center' }}>{gm}</span>
+            <span style={{ fontFamily:'var(--font-display)', fontSize:36, color:'var(--t-1)', minWidth:22, textAlign:'center' }}>{gm}</span>
             <span style={{ color:'var(--t-3)', fontSize:20, fontFamily:'var(--font-display)' }}>:</span>
-            <span className="display" style={{ fontSize:36, color:'var(--t-1)', minWidth:22, textAlign:'center' }}>{gv}</span>
+            <span style={{ fontFamily:'var(--font-display)', fontSize:36, color:'var(--t-1)', minWidth:22, textAlign:'center' }}>{gv}</span>
             <button onClick={() => { setGv(g => g+1); addEvento('gol',`⚽ GOL! ${jogo.visitante?.nome}`) }}
               style={{ width:30, height:30, background:'var(--red-dim)', border:'0.5px solid var(--red-border)', borderRadius:'var(--r-sm)', color:'var(--red)', fontSize:18, cursor:'pointer', fontWeight:700 }}>+</button>
             <Ctrl onClick={() => setGv(g => Math.max(0, g-1))} symbol="−" dim />
@@ -228,15 +318,18 @@ Isso foi Divino App! Futebol de verdade! 🎙️⚽`.trim())
 
         {/* Nav tabs */}
         <div style={{ display:'flex', borderTop:'0.5px solid var(--b-1)' }}>
-          {([['narrar','Narrar'],['elenco','Elencos'],['pontuacao','Pontuação'],['escalacao','Escalação']] as const).map(([v, l]) => (
-            <button key={v} onClick={() => setView(v)} style={{
-              flex:1, padding:'10px 0', background:'none', border:'none',
-              borderBottom: view===v ? '2px solid var(--red)' : '2px solid transparent',
-              color: view===v ? 'var(--t-1)' : 'var(--t-3)',
-              fontSize:11, fontWeight:600, cursor:'pointer', letterSpacing:'0.03em',
-              textTransform:'uppercase', transition:'all 0.15s',
-            }}>{l}</button>
-          ))}
+          {(['narrar','elenco','pontuacao','escalacao'] as const).map((v) => {
+            const labels: Record<View,string> = { narrar:'Narrar', elenco:'Elencos', pontuacao:'Pontuação', escalacao:'Escalação' }
+            return (
+              <button key={v} onClick={() => setView(v)} style={{
+                flex:1, padding:'10px 0', background:'none', border:'none',
+                borderBottom: view===v ? '2px solid var(--red)' : '2px solid transparent',
+                color: view===v ? 'var(--t-1)' : 'var(--t-3)',
+                fontSize:11, fontWeight:600, cursor:'pointer', letterSpacing:'0.03em',
+                textTransform:'uppercase', transition:'all 0.15s',
+              }}>{labels[v]}</button>
+            )
+          })}
         </div>
       </div>
 
@@ -254,8 +347,8 @@ Isso foi Divino App! Futebol de verdade! 🎙️⚽`.trim())
               ].map(a => (
                 <button key={a.label} onClick={a.onClick} style={{
                   background:'var(--bg-card-2)', border:'0.5px solid var(--b-1)',
-                  borderRadius:'var(--r-sm)', padding:'7px 12px',
-                  color:'var(--t-2)', fontSize:12, fontWeight:600, cursor:'pointer',
+                  borderRadius:'var(--r-sm)', padding:'9px 14px',
+                  color:'var(--t-2)', fontSize:13, fontWeight:600, cursor:'pointer',
                 }}>
                   {a.label}
                 </button>
@@ -263,7 +356,7 @@ Isso foi Divino App! Futebol de verdade! 🎙️⚽`.trim())
             </div>
             {eventos.length === 0 ? (
               <div style={{ textAlign:'center', padding:'40px 0', color:'var(--t-3)', fontSize:13 }}>
-                {fase === 'pre' ? 'Inicie a partida para registrar eventos.' : 'Nenhum evento ainda.'}
+                Nenhum evento ainda.
               </div>
             ) : (
               <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
@@ -289,11 +382,11 @@ Isso foi Divino App! Futebol de verdade! 🎙️⚽`.trim())
             <div style={{ display:'flex', gap:8, marginBottom:16 }}>
               {(['mandante','visitante'] as const).map(lado => (
                 <button key={lado} onClick={() => setAbaElenco(lado)} style={{
-                  flex:1, padding:'9px',
+                  flex:1, padding:'10px',
                   background: abaElenco===lado ? 'var(--bg-card-2)' : 'transparent',
                   border:`0.5px solid ${abaElenco===lado ? 'var(--b-2)' : 'var(--b-1)'}`,
                   borderRadius:'var(--r-md)', color: abaElenco===lado ? 'var(--t-1)' : 'var(--t-3)',
-                  fontSize:12, fontWeight:600, cursor:'pointer',
+                  fontSize:13, fontWeight:700, cursor:'pointer',
                 }}>
                   {lado === 'mandante' ? jogo.mandante?.nome : jogo.visitante?.nome}
                 </button>
@@ -309,21 +402,27 @@ Isso foi Divino App! Futebol de verdade! 🎙️⚽`.trim())
                     background:'var(--bg-card)', border:'0.5px solid var(--b-1)',
                     borderRadius:'var(--r-md)', cursor:'pointer', textAlign:'left', width:'100%',
                   }}>
-                    <div style={{ width:36, height:36, borderRadius:'50%', background:'var(--bg-card-2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:700, color:'var(--t-2)', flexShrink:0 }}>
+                    <div style={{ width:40, height:40, borderRadius:'50%', background:'var(--bg-card-2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:700, color:'var(--t-2)', flexShrink:0 }}>
                       {(jog.apelido||jog.nome).slice(0,2).toUpperCase()}
                     </div>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:14, fontWeight:600, color:'var(--t-1)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                         {jog.apelido||jog.nome}
                       </div>
-                      <div style={{ fontSize:11, color:'var(--t-3)', textTransform:'capitalize' }}>
+                      <div style={{ fontSize:11, color:'var(--t-3)', textTransform:'capitalize', marginTop:2 }}>
                         {jog.posicao}
-                        {s.gols > 0 && ` · ⚽${s.gols}`}
-                        {s.assistencias > 0 && ` · 🅰${s.assistencias}`}
+                        {s.gols > 0 && ` · ⚽ ${s.gols}`}
+                        {s.assistencias > 0 && ` · 🅰 ${s.assistencias}`}
                         {s.amarelo && ' · 🟨'}{s.vermelho && ' · 🟥'}
+                        {s.melhorJogo && ' · ⭐'}
                       </div>
                     </div>
-                    <div className="rating-circle" style={{ width:36, height:36, flexShrink:0, borderColor:notaCor, color:notaCor, fontSize:13 }}>
+                    <div style={{
+                      width:40, height:40, borderRadius:'50%', flexShrink:0,
+                      border:`2px solid ${notaCor}`, background:`${notaCor}15`,
+                      display:'flex', alignItems:'center', justifyContent:'center',
+                      fontFamily:'var(--font-display)', fontSize:14, color:notaCor,
+                    }}>
                       {s.nota}
                     </div>
                   </button>
@@ -351,13 +450,13 @@ Isso foi Divino App! Futebol de verdade! 🎙️⚽`.trim())
                   background:'var(--bg-card)', border:'0.5px solid var(--b-1)',
                   borderRadius:'var(--r-md)', marginBottom:6,
                 }}>
-                  <span className="display" style={{ fontSize:22, color: i<3 ? 'var(--yellow)' : 'var(--t-3)', width:24, textAlign:'center' }}>{i+1}</span>
+                  <span style={{ fontFamily:'var(--font-display)', fontSize:22, color: i<3 ? 'var(--yellow)' : 'var(--t-3)', width:24, textAlign:'center' }}>{i+1}</span>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:14, fontWeight:600, color:'var(--t-1)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{jog.apelido||jog.nome}</div>
                     <div style={{ fontSize:11, color:'var(--t-3)' }}>{nomeTime}{s.gols>0&&` · ⚽${s.gols}`}{s.melhorJogo&&' · ⭐'}</div>
                   </div>
                   <div style={{ textAlign:'right', flexShrink:0 }}>
-                    <div className="display" style={{ fontSize:24, color: pts>0 ? 'var(--green)' : pts<0 ? 'var(--red)' : 'var(--t-3)' }}>
+                    <div style={{ fontFamily:'var(--font-display)', fontSize:24, color: pts>0 ? 'var(--green)' : pts<0 ? 'var(--red)' : 'var(--t-3)' }}>
                       {pts>0?`+${pts}`:pts}
                     </div>
                     <div style={{ fontSize:10, color:'var(--t-3)' }}>pts</div>
@@ -385,10 +484,13 @@ Isso foi Divino App! Futebol de verdade! 🎙️⚽`.trim())
                 }}>{escalacao}</pre>
                 <div style={{ display:'flex', gap:8 }}>
                   <button onClick={() => { navigator.clipboard.writeText(escalacao); setCopiado(true); setTimeout(()=>setCopiado(false),2000) }}
-                    className="btn btn-primary btn-sm" style={{ flex:1 }}>
-                    {copiado ? '✓ Copiado!' : 'Copiar texto'}
+                    style={{ flex:1, padding:'12px', background:'var(--red-dim)', border:'0.5px solid var(--red-border)', borderRadius:'var(--r-md)', color:'var(--red)', fontSize:13, fontWeight:700, cursor:'pointer' }}>
+                    {copiado ? '✓ Copiado!' : '📋 Copiar texto'}
                   </button>
-                  <button onClick={gerarEscalacao} className="btn btn-ghost btn-sm" style={{ flex:1 }}>Gerar novamente</button>
+                  <button onClick={gerarEscalacao}
+                    style={{ flex:1, padding:'12px', background:'var(--bg-card-2)', border:'0.5px solid var(--b-1)', borderRadius:'var(--r-md)', color:'var(--t-2)', fontSize:13, fontWeight:600, cursor:'pointer' }}>
+                    Gerar novamente
+                  </button>
                 </div>
               </div>
             ) : (
@@ -397,73 +499,110 @@ Isso foi Divino App! Futebol de verdade! 🎙️⚽`.trim())
                 <div style={{ fontSize:14, marginBottom:20 }}>
                   {fase === 'encerrado' ? 'Clique para gerar a escalação DivinoTV.' : 'A escalação é gerada após encerrar a partida.'}
                 </div>
-                {fase === 'encerrado' && <button onClick={gerarEscalacao} className="btn btn-primary btn-sm">Gerar escalação</button>}
+                {fase === 'encerrado' && (
+                  <button onClick={gerarEscalacao}
+                    style={{ padding:'12px 24px', background:'var(--red-dim)', border:'0.5px solid var(--red-border)', borderRadius:'var(--r-md)', color:'var(--red)', fontSize:14, fontWeight:700, cursor:'pointer' }}>
+                    Gerar escalação
+                  </button>
+                )}
               </div>
             )}
           </div>
         )}
       </div>
 
-      {/* ─── JOGADOR SHEET ─── */}
+      {/* ─── JOGADOR SHEET (Cartola-style) ─── */}
       {jogadorSheet && (
         <div onClick={() => setJogadorSheet(null)}
-          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:200, display:'flex', alignItems:'flex-end' }}>
-          <div onClick={e => e.stopPropagation()} className="animate-slide-up"
-            style={{ background:'var(--bg-sheet)', borderRadius:'var(--r-xl) var(--r-xl) 0 0', padding:20, width:'100%', maxWidth:480, margin:'0 auto' }}>
-            <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20 }}>
-              <div style={{ width:44, height:44, borderRadius:'50%', background:'var(--bg-card-2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:700, color:'var(--t-2)' }}>
+          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', zIndex:200, display:'flex', alignItems:'flex-end' }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background:'var(--bg-sheet)', borderRadius:'var(--r-xl) var(--r-xl) 0 0', padding:'20px 20px calc(20px + env(safe-area-inset-bottom,0px))', width:'100%', maxWidth:480, margin:'0 auto' }}>
+
+            {/* Handle */}
+            <div style={{ width:40, height:4, background:'var(--b-2)', borderRadius:2, margin:'0 auto 20px' }} />
+
+            {/* Player header */}
+            <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:24 }}>
+              <div style={{ width:52, height:52, borderRadius:'50%', background:'var(--bg-card-2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, fontWeight:700, color:'var(--t-2)', flexShrink:0 }}>
                 {(jogadorSheet.apelido||jogadorSheet.nome).slice(0,2).toUpperCase()}
               </div>
               <div>
-                <div style={{ fontSize:16, fontWeight:700, color:'var(--t-1)' }}>{jogadorSheet.apelido||jogadorSheet.nome}</div>
-                <div style={{ fontSize:12, color:'var(--t-3)', textTransform:'capitalize' }}>{jogadorSheet.posicao}</div>
+                <div style={{ fontSize:17, fontWeight:700, color:'var(--t-1)' }}>{jogadorSheet.apelido||jogadorSheet.nome}</div>
+                <div style={{ fontSize:12, color:'var(--t-3)', textTransform:'capitalize', marginTop:2 }}>{jogadorSheet.posicao}</div>
+              </div>
+              <div style={{ marginLeft:'auto', textAlign:'center' }}>
+                <div style={{ fontFamily:'var(--font-display)', fontSize:28, color: sheetEdit.nota>=8 ? 'var(--green)' : sheetEdit.nota>=6 ? 'var(--yellow)' : 'var(--red)' }}>
+                  {sheetEdit.nota}
+                </div>
+                <div style={{ fontSize:10, color:'var(--t-3)' }}>nota</div>
               </div>
             </div>
 
-            {([['Gols','gols'],['Assistências','assistencias'],['Defesas','defesas']] as const).map(([label, key]) => (
-              <div key={key} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 0', borderBottom:'0.5px solid var(--b-1)' }}>
-                <span style={{ fontSize:14, color:'var(--t-2)' }}>{label}</span>
-                <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-                  <button onClick={() => setSheetEdit(e => ({ ...e, [key]: Math.max(0, e[key]-1) }))}
-                    style={{ width:32, height:32, background:'var(--bg-card-2)', border:'0.5px solid var(--b-1)', borderRadius:'var(--r-sm)', color:'var(--t-1)', fontSize:18, cursor:'pointer' }}>−</button>
-                  <span style={{ width:20, textAlign:'center', fontSize:16, fontWeight:700, color:'var(--t-1)' }}>{sheetEdit[key]}</span>
-                  <button onClick={() => setSheetEdit(e => ({ ...e, [key]: e[key]+1 }))}
-                    style={{ width:32, height:32, background:'var(--bg-card-2)', border:'0.5px solid var(--b-1)', borderRadius:'var(--r-sm)', color:'var(--t-1)', fontSize:18, cursor:'pointer' }}>+</button>
+            {/* Counters: Gols / Assistências / Defesas */}
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:16 }}>
+              {([['⚽', 'Gols', 'gols'], ['🅰️', 'Assists', 'assistencias'], ['🧤', 'Defesas', 'defesas']] as const).map(([icon, label, key]) => (
+                <div key={key} style={{ background:'var(--bg-card)', border:'0.5px solid var(--b-1)', borderRadius:'var(--r-lg)', padding:'12px 8px', textAlign:'center' }}>
+                  <div style={{ fontSize:20, marginBottom:4 }}>{icon}</div>
+                  <div style={{ fontSize:10, color:'var(--t-3)', marginBottom:10, textTransform:'uppercase', letterSpacing:'0.05em' }}>{label}</div>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                    <button onClick={() => setSheetEdit(e => ({ ...e, [key]: Math.max(0, e[key]-1) }))}
+                      style={{ width:36, height:36, background:'var(--bg-card-2)', border:'0.5px solid var(--b-1)', borderRadius:'var(--r-sm)', color:'var(--t-1)', fontSize:20, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>−</button>
+                    <span style={{ fontSize:20, fontWeight:700, color:'var(--t-1)', minWidth:20, textAlign:'center' }}>{sheetEdit[key]}</span>
+                    <button onClick={() => setSheetEdit(e => ({ ...e, [key]: e[key]+1 }))}
+                      style={{ width:36, height:36, background:'var(--bg-card-2)', border:'0.5px solid var(--b-1)', borderRadius:'var(--r-sm)', color:'var(--t-1)', fontSize:20, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>+</button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
 
-            <div style={{ display:'flex', gap:8, padding:'12px 0', borderBottom:'0.5px solid var(--b-1)' }}>
+            {/* Toggles: Amarelo / Vermelho / Melhor */}
+            <div style={{ display:'flex', gap:8, marginBottom:16 }}>
               {[
-                { key:'amarelo' as const, label:'🟨 Amarelo', active: sheetEdit.amarelo, cor:'rgba(245,184,0,0.15)', bord:'rgba(245,184,0,0.4)', txt:'var(--yellow)' },
-                { key:'vermelho' as const, label:'🟥 Vermelho', active: sheetEdit.vermelho, cor:'rgba(232,35,42,0.15)', bord:'var(--red-border)', txt:'var(--red)' },
-                { key:'melhorJogo' as const, label:'⭐ Melhor', active: sheetEdit.melhorJogo, cor:'rgba(245,184,0,0.15)', bord:'rgba(245,184,0,0.4)', txt:'var(--yellow)' },
+                { key:'amarelo' as const,    label:'🟨 Amarelo', active: sheetEdit.amarelo,   cor:'rgba(245,184,0,0.15)',   bord:'rgba(245,184,0,0.4)',   txt:'var(--yellow)' },
+                { key:'vermelho' as const,   label:'🟥 Vermelho', active: sheetEdit.vermelho, cor:'rgba(232,35,42,0.15)',   bord:'var(--red-border)',     txt:'var(--red)'    },
+                { key:'melhorJogo' as const, label:'⭐ Melhor',   active: sheetEdit.melhorJogo, cor:'rgba(245,184,0,0.15)', bord:'rgba(245,184,0,0.4)',   txt:'var(--yellow)' },
               ].map(({ key, label, active, cor, bord, txt }) => (
                 <button key={key} onClick={() => setSheetEdit(e => ({ ...e, [key]: !e[key] }))}
-                  style={{ flex:1, padding:'9px', background: active ? cor : 'var(--bg-card-2)', border:`0.5px solid ${active?bord:'var(--b-1)'}`, borderRadius:'var(--r-sm)', color: active ? txt : 'var(--t-3)', fontSize:12, fontWeight:600, cursor:'pointer' }}>
+                  style={{
+                    flex:1, padding:'12px 6px',
+                    background: active ? cor : 'var(--bg-card)',
+                    border:`0.5px solid ${active?bord:'var(--b-1)'}`,
+                    borderRadius:'var(--r-md)',
+                    color: active ? txt : 'var(--t-3)',
+                    fontSize:12, fontWeight:700, cursor:'pointer',
+                    transition:'all 0.15s',
+                  }}>
                   {label}
                 </button>
               ))}
             </div>
 
-            <div style={{ padding:'12px 0', marginBottom:16 }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-                <span style={{ fontSize:14, color:'var(--t-2)' }}>Nota</span>
-                <span className="display" style={{ fontSize:28, color: sheetEdit.nota>=8 ? 'var(--green)' : sheetEdit.nota>=6 ? 'var(--yellow)' : 'var(--red)' }}>
+            {/* Nota slider */}
+            <div style={{ background:'var(--bg-card)', border:'0.5px solid var(--b-1)', borderRadius:'var(--r-lg)', padding:'14px 16px', marginBottom:20 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+                <span style={{ fontSize:13, color:'var(--t-2)', fontWeight:600 }}>Nota do jogo</span>
+                <span style={{ fontFamily:'var(--font-display)', fontSize:32, color: sheetEdit.nota>=8 ? 'var(--green)' : sheetEdit.nota>=6 ? 'var(--yellow)' : 'var(--red)' }}>
                   {sheetEdit.nota}
                 </span>
               </div>
               <input type="range" min={1} max={10} step={0.5} value={sheetEdit.nota}
                 onChange={e => setSheetEdit(ed => ({ ...ed, nota: Number(e.target.value) }))}
-                style={{ width:'100%', accentColor:'var(--red)' }} />
-              <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:'var(--t-3)', marginTop:2 }}>
-                <span>1</span><span>5</span><span>10</span>
+                style={{ width:'100%', accentColor:'var(--red)', height:6 }} />
+              <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:'var(--t-3)', marginTop:4 }}>
+                <span>1 (Ruim)</span><span>5 (Médio)</span><span>10 (Elite)</span>
               </div>
             </div>
 
-            <div style={{ display:'flex', gap:8 }}>
-              <button onClick={() => setJogadorSheet(null)} className="btn btn-ghost btn-sm" style={{ flex:1 }}>Cancelar</button>
-              <button onClick={salvarSheet} className="btn btn-primary btn-sm" style={{ flex:1 }}>Salvar</button>
+            {/* Actions */}
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={() => setJogadorSheet(null)}
+                style={{ flex:1, padding:'14px', background:'var(--bg-card-2)', border:'0.5px solid var(--b-1)', borderRadius:'var(--r-md)', color:'var(--t-3)', fontSize:14, fontWeight:600, cursor:'pointer' }}>
+                Cancelar
+              </button>
+              <button onClick={salvarSheet}
+                style={{ flex:2, padding:'14px', background:'var(--red-dim)', border:'0.5px solid var(--red-border)', borderRadius:'var(--r-md)', color:'var(--red)', fontSize:14, fontWeight:700, cursor:'pointer' }}>
+                Salvar pontuação
+              </button>
             </div>
           </div>
         </div>
