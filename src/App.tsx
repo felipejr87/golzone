@@ -12,11 +12,11 @@ import AdminLayout from './pages/admin/AdminLayout'
 import Dashboard from './pages/admin/Dashboard'
 import AdminCampeonatos from './pages/admin/AdminCampeonatos'
 import AdminTimes from './pages/admin/AdminTimes'
+import AdminJogadores from './pages/admin/AdminJogadores'
 import AdminJogos from './pages/admin/AdminJogos'
 import AdminJogo from './pages/admin/AdminJogo'
 import AdminSumula from './pages/admin/AdminSumula'
 import AdminNarracao from './pages/admin/AdminNarracao'
-import AdminStats from './pages/admin/AdminStats'
 import DivinoLeague from './pages/DivinoLeague'
 
 export default function App() {
@@ -31,16 +31,16 @@ export default function App() {
           <Route path="/p/:id"      element={<Player />} />
           <Route path="/scout"      element={<Scout />} />
           <Route path="/destaques"  element={<Destaques />} />
-          <Route path="/admin/login" element={<AdminLogin />} />
-          <Route path="/admin"      element={<AdminLayout><Dashboard /></AdminLayout>} />
+          <Route path="/admin/login"    element={<AdminLogin />} />
+          <Route path="/admin"          element={<AdminLayout><Dashboard /></AdminLayout>} />
           <Route path="/admin/campeonatos" element={<AdminLayout><AdminCampeonatos /></AdminLayout>} />
           <Route path="/admin/times"       element={<AdminLayout><AdminTimes /></AdminLayout>} />
+          <Route path="/admin/jogadores"   element={<AdminLayout><AdminJogadores /></AdminLayout>} />
           <Route path="/admin/jogos"       element={<AdminLayout><AdminJogos /></AdminLayout>} />
           <Route path="/admin/jogo/:id"    element={<AdminLayout><AdminJogo /></AdminLayout>} />
           <Route path="/admin/jogos/:id/sumula" element={<AdminLayout><AdminSumula /></AdminLayout>} />
           <Route path="/admin/narracao/:id" element={<AdminNarracao />} />
-          <Route path="/admin/stats" element={<AdminLayout><AdminStats /></AdminLayout>} />
-          <Route path="/divino-league" element={<DivinoLeague />} />
+          <Route path="/divino-league"  element={<DivinoLeague />} />
         </Routes>
       </main>
       <BottomNav />
