@@ -1,56 +1,52 @@
 import { Link, useLocation } from 'react-router-dom'
-import { MOCK_DATA } from '../../lib/mockData'
+import { db } from '../../lib/data'
 
 export function Header() {
   const loc = useLocation()
   const isAdmin = loc.pathname.startsWith('/admin')
-  const aoVivo = MOCK_DATA.matches.filter(m => m.status === 'em_andamento')
-  const hasLive = aoVivo.length > 0
+  const isNarracao = loc.pathname.startsWith('/admin/narracao')
+  const liveCount = db.jogos.aoVivo().length
 
-  const navLinks = [
-    { to: '/', label: 'Home' },
-    { to: '/scout', label: 'Scout' },
-    { to: '/destaques', label: 'Destaques' },
-  ]
+  if (isNarracao) return null
 
   return (
-    <header className="sticky top-0 z-50 bg-[#060608]/95 backdrop-blur-sm border-b border-white/5">
-      <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-3">
-
-        {/* Logo */}
-        <Link to="/" className="flex items-center gap-2.5 flex-shrink-0">
-          <img src="/divinotv.jpg" alt="Divino TV" className="h-9 w-auto object-contain" />
+    <header style={{
+      position: 'sticky', top: 0, zIndex: 100,
+      background: 'rgba(7,8,12,0.92)',
+      backdropFilter: 'blur(16px)',
+      borderBottom: '0.5px solid var(--b-1)',
+      height: 52,
+    }}>
+      <div style={{
+        maxWidth: 640, margin: '0 auto', height: '100%',
+        padding: '0 16px', display: 'flex', alignItems: 'center', gap: 12,
+      }}>
+        <Link to={isAdmin ? '/admin' : '/'} style={{ display:'flex', alignItems:'center', gap:8, textDecoration:'none' }}>
+          <img src="/divinotv.jpg" alt="Divino TV" style={{ height:30, width:'auto', objectFit:'contain' }} />
         </Link>
 
-        {/* Nav desktop */}
         {!isAdmin && (
-          <nav className="hidden md:flex items-center gap-1 ml-4">
-            {navLinks.map(l => (
-              <Link key={l.to} to={l.to}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                  loc.pathname === l.to
-                    ? 'bg-white/10 text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
-                }`}>
-                {l.label}
-              </Link>
+          <nav style={{ display:'flex', gap:4, marginLeft:8 }}>
+            {([['/', 'Home'], ['/scout', 'Scout'], ['/destaques', 'Destaques']] as const).map(([to, label]) => (
+              <Link key={to} to={to} style={{
+                padding: '6px 12px', borderRadius: 'var(--r-sm)', fontSize: 13, fontWeight: 500,
+                color: loc.pathname === to ? 'var(--t-1)' : 'var(--t-2)',
+                background: loc.pathname === to ? 'var(--bg-card-2)' : 'transparent',
+                textDecoration: 'none', transition: 'all 0.15s',
+              }}>{label}</Link>
             ))}
           </nav>
         )}
 
-        <div className="ml-auto flex items-center gap-2">
-          {/* Badge AO VIVO */}
-          {hasLive && !isAdmin && (
-            <Link to={`/m/${aoVivo[0].id}`}
-              className="flex items-center gap-1.5 bg-red-500/15 border border-red-500/30 px-2.5 py-1 rounded-full hover:bg-red-500/25 transition">
-              <span className="w-1.5 h-1.5 bg-red-500 rounded-full badge-live flex-shrink-0" />
-              <span className="text-red-400 text-xs font-condensed tracking-wider">AO VIVO</span>
+        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8 }}>
+          {liveCount > 0 && !isAdmin && (
+            <Link to="/" className="badge badge-live" style={{ textDecoration:'none' }}>
+              <span className="live-dot" />
+              AO VIVO
             </Link>
           )}
-
           {!isAdmin && (
-            <Link to="/admin"
-              className="text-xs text-gray-600 hover:text-gray-400 transition px-2 py-1">
+            <Link to="/admin" style={{ fontSize:12, color:'var(--t-3)', textDecoration:'none', padding:'4px 8px' }}>
               Admin
             </Link>
           )}

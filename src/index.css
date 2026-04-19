@@ -1,58 +1,106 @@
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&display=swap');
+@import './styles/components.css';
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body { background: #060608; color: white; font-family: 'Inter', sans-serif; margin: 0; }
+/* ── TOKENS ─────────────────────────────────── */
+:root {
+  /* Backgrounds */
+  --bg-base:    #07080C;
+  --bg-card:    #0F1117;
+  --bg-card-2:  #181B24;
+  --bg-input:   rgba(255,255,255,0.05);
+  --bg-sheet:   #0D0F16;
 
-/* Display: placares e títulos principais */
-.font-display  { font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.02em; }
+  /* Marca */
+  --red:        #E8232A;
+  --red-dark:   #A81920;
+  --red-dim:    rgba(232,35,42,0.12);
+  --red-border: rgba(232,35,42,0.25);
 
-/* Condensed: labels, categorias, badges */
-.font-condensed { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; letter-spacing: 0.08em; }
+  /* Texto */
+  --t-1: #FFFFFF;
+  --t-2: #8B909E;
+  --t-3: #3D4255;
 
-/* Placar gigante — hero e detalhe de jogo */
-.placar-hero {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: clamp(64px, 12vw, 120px);
-  line-height: 1;
-  letter-spacing: 0.04em;
-  color: #fff;
-  text-shadow: 0 0 40px rgba(232,35,42,0.3);
+  /* Semânticas */
+  --green:  #00C98D;
+  --yellow: #F5B800;
+  --blue:   #4B9FFF;
+
+  /* Bordas */
+  --b-1: rgba(255,255,255,0.08);
+  --b-2: rgba(255,255,255,0.14);
+
+  /* Tipografia */
+  --font-display: 'Bebas Neue', sans-serif;
+  --font-body:    'Outfit', sans-serif;
+
+  /* Raios */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+
+  /* Sombras */
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.2);
+  --shadow-red:  0 4px 24px rgba(232,35,42,0.25);
 }
 
-/* Badge AO VIVO */
-@keyframes pulse-live { 0%,100%{opacity:1} 50%{opacity:0.4} }
-.badge-live { animation: pulse-live 1.5s ease-in-out infinite; }
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
-/* Card hover */
-.card-hover {
-  border: 1px solid rgba(255,255,255,0.06);
-  transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s;
-}
-.card-hover:hover {
-  border-color: rgba(232,35,42,0.35);
-  box-shadow: 0 4px 24px rgba(232,35,42,0.08);
-  transform: translateY(-1px);
-}
+html { height: 100%; overscroll-behavior: none; }
 
-/* Gradiente texto */
-.text-gradient {
-  background: linear-gradient(135deg, #E8232A 0%, #FF6B35 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+body {
+  font-family: var(--font-body);
+  background: var(--bg-base);
+  color: var(--t-1);
+  min-height: 100%;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
-.glow-red {
-  box-shadow: 0 0 20px rgba(232,35,42,0.3), 0 0 60px rgba(232,35,42,0.1);
+#root { min-height: 100vh; display: flex; flex-direction: column; }
+
+/* ── TIPOGRAFIA ──────────────────────────────── */
+.display { font-family: var(--font-display); letter-spacing: 0.03em; line-height: 1; }
+
+/* ── ANIMAÇÕES ───────────────────────────────── */
+@keyframes pulse-dot {
+  0%,100% { opacity:1; transform:scale(1); }
+  50%      { opacity:0.4; transform:scale(0.7); }
+}
+@keyframes fade-up {
+  from { opacity:0; transform:translateY(8px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+@keyframes slide-up {
+  from { opacity:0; transform:translateY(100%); }
+  to   { opacity:1; transform:translateY(0); }
+}
+.animate-fade-up { animation: fade-up 0.3s ease both; }
+.animate-slide-up { animation: slide-up 0.35s cubic-bezier(0.34,1.56,0.64,1) both; }
+
+.live-dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  background: var(--red);
+  border-radius: 50%;
+  animation: pulse-dot 1.4s ease-in-out infinite;
 }
 
-/* Scrollbar */
+/* ── SCROLLBAR ───────────────────────────────── */
 ::-webkit-scrollbar { width: 3px; height: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #E8232A; border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: var(--b-2); border-radius: 2px; }
 
-/* PWA safe area */
-.pb-safe { padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }
+/* ── UTILS ───────────────────────────────────── */
+.hide-scroll { scrollbar-width:none; }
+.hide-scroll::-webkit-scrollbar { display:none; }
+
+/* ── SAFE AREA ───────────────────────────────── */
+.pb-safe { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
+.pt-safe { padding-top: env(safe-area-inset-top, 0px); }

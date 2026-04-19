@@ -1,0 +1,84 @@
+/* ── CARDS ───────────────────────────────────── */
+.card {
+  background: var(--bg-card);
+  border: 0.5px solid var(--b-1);
+  border-radius: var(--r-lg);
+  transition: border-color 0.15s;
+}
+.card:hover { border-color: var(--b-2); }
+.card-active:hover { border-color: var(--red-border); }
+.card-live { border-color: var(--red-border); background: linear-gradient(160deg,#120305 0%,var(--bg-card) 60%); }
+
+/* ── BOTÕES ──────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-family: var(--font-body); font-weight: 600; font-size: 14px;
+  border-radius: var(--r-md); border: none; cursor: pointer;
+  transition: all 0.15s; white-space: nowrap; text-decoration: none;
+}
+.btn:active { transform: scale(0.97); }
+
+.btn-primary {
+  background: var(--red); color: #fff; padding: 12px 20px;
+  box-shadow: var(--shadow-red);
+}
+.btn-primary:hover { background: #CC1F25; }
+
+.btn-secondary {
+  background: var(--bg-card-2); color: var(--t-1); padding: 12px 20px;
+  border: 0.5px solid var(--b-2);
+}
+.btn-secondary:hover { background: #1E2230; }
+
+.btn-ghost {
+  background: transparent; color: var(--t-2); padding: 10px 16px;
+  border: 0.5px solid var(--b-1);
+}
+.btn-ghost:hover { color: var(--t-1); border-color: var(--b-2); }
+
+.btn-icon {
+  background: var(--bg-card-2); color: var(--t-1); padding: 0;
+  width: 40px; height: 40px; border-radius: var(--r-md);
+  border: 0.5px solid var(--b-1);
+}
+
+.btn-sm { padding: 8px 14px; font-size: 13px; border-radius: var(--r-sm); }
+.btn-lg { padding: 16px 28px; font-size: 16px; border-radius: var(--r-lg); }
+.btn-full { width: 100%; }
+
+/* ── SCORE ───────────────────────────────────── */
+.score { font-family: var(--font-display); color: var(--t-1); }
+.score-xl { font-size: clamp(56px, 14vw, 100px); }
+.score-lg { font-size: clamp(36px, 9vw, 64px); }
+.score-md { font-size: 28px; }
+
+/* ── BADGE ───────────────────────────────────── */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 100px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.badge-live { background: var(--red-dim); color: var(--red); border: 0.5px solid var(--red-border); }
+.badge-end  { background: rgba(139,144,158,0.1); color: var(--t-3); border: 0.5px solid var(--b-1); }
+.badge-soon { background: rgba(75,159,255,0.1); color: var(--blue); border: 0.5px solid rgba(75,159,255,0.2); }
+
+/* ── INPUTS ──────────────────────────────────── */
+.input {
+  width: 100%; background: var(--bg-input); border: 0.5px solid var(--b-1);
+  border-radius: var(--r-md); padding: 12px 14px;
+  color: var(--t-1); font-family: var(--font-body); font-size: 14px; outline: none;
+  transition: border-color 0.15s;
+}
+.input::placeholder { color: var(--t-3); }
+.input:focus { border-color: var(--red); }
+
+.select { appearance: none; cursor: pointer; }
+
+/* ── DIVISOR ─────────────────────────────────── */
+.divider { height: 0.5px; background: var(--b-1); border: none; }
+
+/* ── RATING CIRCLE ───────────────────────────── */
+.rating-circle {
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; border: 1.5px solid; font-weight: 700;
+}

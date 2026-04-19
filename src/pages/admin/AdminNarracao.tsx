@@ -1,820 +1,484 @@
-import { useState, useCallback } from 'react'
-import { MOCK_DATA, ESCALACOES } from '../../lib/mockData'
-import type { EscalacaoJogador } from '../../lib/mockData'
+import { useState, useEffect, useRef } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { db } from '../../lib/data'
 
-// ── Tipos ────────────────────────────────────────────────────────────────────
+type Fase = 'pre' | 'primeiro' | 'intervalo' | 'segundo' | 'encerrado'
+type View = 'narrar' | 'elenco' | 'pontuacao' | 'escalacao'
 
-type Match = typeof MOCK_DATA.matches[number]
-
-type Acao = {
-  key:   string
-  label: string
-  icone: string
-  pts:   number
-  cor:   string
+const APELIDOS: Record<string, string[]> = {
+  goleiro:  ['Mão de Aço (reflexos sobrenaturais)','O Intocável (ninguém passou)','Gato Elétrico (se jogou em tudo)','Borracha Humana (se esticou em tudo)'],
+  zagueiro: ['Anita (não deixou passar ninguém)','Muralha da China (intransponível)','Rocha Viva (inabalável)','Blindagem Total (cobriu tudo)'],
+  lateral:  ['Foguete pela Lateral (velocidade impressionante)','Linha de Trem (foi e voltou o jogo inteiro)','Corredor Infinito (incansável)','Bicuda (cruzamento na medida)'],
+  volante:  ['Aspirador de Pó (roubou tudo no meio)','Segurança VIP (não deixou entrar)','Central de Distribuição (simples e eficiente)','Blindagem no Meio (parou tudo)'],
+  meia:     ['GPS do Campo (sempre no lugar certo)','Maestro (ditou o ritmo)','Fio Condutor (ligou tudo)','Vitamina C (presente quando precisou)'],
+  atacante: ['Foguete (ninguém parou)','Ninja (sumiu e apareceu na hora certa)','Coração Maior que o Campo (deu tudo)','Soldado de Ouro (correu pelo time inteiro)'],
 }
 
-type Evento = {
-  id:            number
-  minuto:        number
-  timeId:        number
-  timeNome:      string
-  jogadorNome:   string
-  jogadorNumero: number
-  acao:          Acao
+function apelido(pos: string) {
+  const l = APELIDOS[pos] || APELIDOS.atacante
+  return l[Math.floor(Math.random() * l.length)]
 }
 
-type JogLive = EscalacaoJogador & { timeId: number; timeNome: string }
-
-// ── Pontuação Cartola FC ─────────────────────────────────────────────────────
-
-const ACOES: Acao[] = [
-  { key:'gol',             label:'Gol',           icone:'⚽', pts: 8.0,  cor:'bg-green-600'  },
-  { key:'assistencia',     label:'Assistência',    icone:'🎯', pts: 5.0,  cor:'bg-blue-600'   },
-  { key:'gol_contra',      label:'Gol Contra',     icone:'↩️', pts:-3.0,  cor:'bg-red-700'    },
-  { key:'cartao_amarelo',  label:'Amarelo',         icone:'🟨', pts:-1.0,  cor:'bg-yellow-600' },
-  { key:'cartao_vermelho', label:'Vermelho',        icone:'🟥', pts:-3.0,  cor:'bg-red-600'    },
-  { key:'carrinho',        label:'Carrinho',        icone:'🦵', pts: 1.5,  cor:'bg-teal-600'   },
-  { key:'falta',           label:'Falta',           icone:'🚩', pts:-0.3,  cor:'bg-orange-600' },
-  { key:'passe_certo',     label:'Passe+',          icone:'✅', pts: 0.1,  cor:'bg-green-800'  },
-  { key:'passe_errado',    label:'Passe−',          icone:'❌', pts:-0.1,  cor:'bg-red-800'    },
-  { key:'impedimento',     label:'Impedimento',     icone:'🚧', pts:-0.1,  cor:'bg-gray-600'   },
-  { key:'finalizacao',     label:'Finalização',     icone:'💥', pts: 0.5,  cor:'bg-indigo-600' },
-  { key:'defesa_dificil',  label:'Defesa Difícil',  icone:'🧤', pts: 1.0,  cor:'bg-cyan-700'   },
-]
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function getTeamStats(teamId: number, campId: number) {
-  const nome     = MOCK_DATA.times.find(t => t.id === teamId)?.nome ?? ''
-  const partidas = MOCK_DATA.matches.filter(m =>
-    m.championship_id === campId &&
-    (m.mandante_id === teamId || m.visitante_id === teamId) &&
-    m.status === 'finalizado'
-  )
-  let wins = 0, draws = 0, losses = 0, gf = 0, gc = 0
-  partidas.forEach(m => {
-    if (!m.resultado) return
-    const isHome = m.mandante_id === teamId
-    const tf = isHome ? m.resultado.gols_mandante : m.resultado.gols_visitante
-    const ta = isHome ? m.resultado.gols_visitante : m.resultado.gols_mandante
-    gf += tf; gc += ta
-    if (tf > ta) wins++; else if (tf === ta) draws++; else losses++
-  })
-  const artilheiros: Record<string, number> = {}
-  partidas.forEach(m => m.gols.forEach(g => {
-    if (g.team.nome === nome) artilheiros[g.jogador] = (artilheiros[g.jogador] || 0) + 1
-  }))
-  const topArtilheiros = Object.entries(artilheiros).sort(([,a],[,b]) => b - a).slice(0, 5)
-  const cartoesMap: Record<string, {amarelo:number;vermelho:number}> = {}
-  partidas.forEach(m => m.cartoes.forEach(c => {
-    if (c.team.nome === nome) {
-      if (!cartoesMap[c.jogador]) cartoesMap[c.jogador] = { amarelo:0, vermelho:0 }
-      if (c.tipo === 'amarelo') cartoesMap[c.jogador].amarelo++
-      else if (c.tipo === 'vermelho') cartoesMap[c.jogador].vermelho++
-      else { cartoesMap[c.jogador].amarelo++; cartoesMap[c.jogador].vermelho++ }
-    }
-  }))
-  const ultimos = partidas.slice(-5).reverse().map(m => {
-    if (!m.resultado) return null
-    const isHome = m.mandante_id === teamId
-    const tf = isHome ? m.resultado.gols_mandante : m.resultado.gols_visitante
-    const ta = isHome ? m.resultado.gols_visitante : m.resultado.gols_mandante
-    return { res: tf > ta ? 'V' : tf === ta ? 'E' : 'D', tf, ta, oponente: isHome ? m.visitante?.nome : m.mandante?.nome, matchId: m.id }
-  }).filter(Boolean) as { res:string; tf:number; ta:number; oponente?:string; matchId:number }[]
-  return { wins, draws, losses, gf, gc, topArtilheiros, cartoesMap, ultimos }
+interface JogStats {
+  gols: number; assistencias: number; defesas: number
+  amarelo: boolean; vermelho: boolean; nota: number; melhorJogo: boolean
 }
 
-// ── Componente principal ─────────────────────────────────────────────────────
+const DEFAULT_STATS: JogStats = { gols:0, assistencias:0, defesas:0, amarelo:false, vermelho:false, nota:7, melhorJogo:false }
+
+function pontos(s: JogStats): number {
+  return (s.gols*8) + (s.assistencias*5) + (s.defesas*3) +
+    Math.round((s.nota-5)*2) + (s.amarelo ? -2 : 0) + (s.vermelho ? -5 : 0)
+}
 
 export default function AdminNarracao() {
-  const [matchSel, setMatchSel] = useState<Match | null>(null)
-  const [aba, setAba] = useState<'elencos'|'narrar'|'prejogo'|'h2h'>('narrar')
+  const { id } = useParams()
+  const navigate = useNavigate()
+  const jogo = db.jogos.buscar(Number(id))
 
-  const proximos = MOCK_DATA.matches.filter(m => m.status === 'agendado' || m.status === 'em_andamento')
+  const [fase, setFase] = useState<Fase>('pre')
+  const [minuto, setMinuto] = useState(0)
+  const [acrescimo, setAcrescimo] = useState(0)
+  const [gm, setGm] = useState(0)
+  const [gv, setGv] = useState(0)
+  const [eventos, setEventos] = useState<{m:number; txt:string; tipo:string}[]>([])
+  const [stats, setStats] = useState<Record<number, JogStats>>({})
+  const [abaElenco, setAbaElenco] = useState<'mandante'|'visitante'>('mandante')
+  const [jogadorSheet, setJogadorSheet] = useState<any>(null)
+  const [sheetEdit, setSheetEdit] = useState<JogStats>(DEFAULT_STATS)
+  const [view, setView] = useState<View>('narrar')
+  const [escalacao, setEscalacao] = useState('')
+  const [gerando, setGerando] = useState(false)
+  const [copiado, setCopiado] = useState(false)
+  const timer = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  if (!matchSel) return <MatchSelector matches={proximos} onSelect={m => { setMatchSel(m); setAba('narrar') }} />
+  const emJogo = fase === 'primeiro' || fase === 'segundo'
 
-  return (
-    <PainelNarrador
-      match={matchSel}
-      aba={aba}
-      setAba={setAba}
-      onBack={() => setMatchSel(null)}
-    />
-  )
-}
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (emJogo) { e.preventDefault(); e.returnValue = '' }
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [emJogo])
 
-// ── Seleção de jogo ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (emJogo) {
+      timer.current = setInterval(() => setMinuto(m => m + 1), 60000)
+    } else {
+      if (timer.current) clearInterval(timer.current)
+    }
+    return () => { if (timer.current) clearInterval(timer.current) }
+  }, [emJogo])
 
-function MatchSelector({ matches, onSelect }: { matches: Match[]; onSelect: (m: Match) => void }) {
-  return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-black text-white flex items-center gap-2">🎙️ Iniciar Narração</h1>
-        <p className="text-gray-500 text-sm mt-1">Selecione o jogo para abrir o painel do narrador</p>
-      </div>
+  if (!jogo) return <div style={{ padding:32, color:'var(--t-3)' }}>Jogo não encontrado.</div>
 
-      {matches.length === 0 && (
-        <p className="text-gray-500 text-sm text-center py-10">Nenhum jogo agendado.</p>
-      )}
+  const mandJogs = db.mockJogadoresPorTime(jogo.mandante_id) || []
+  const visitJogs = db.mockJogadoresPorTime(jogo.visitante_id) || []
+  const todosJogs = [...mandJogs, ...visitJogs]
 
-      <div className="space-y-3">
-        {matches.map(m => (
-          <button key={m.id} onClick={() => onSelect(m)}
-            className="w-full bg-[#111811] border border-white/10 hover:border-[#E8232A]/60 rounded-2xl p-5 text-left transition group">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs text-gray-500">{m.championship?.nome} · Rodada {m.rodada}</span>
-              {m.status === 'em_andamento'
-                ? <span className="text-xs font-bold text-red-400 bg-red-500/20 px-2 py-0.5 rounded-full">🔴 AO VIVO</span>
-                : <span className="text-xs text-[#4B9FFF]">
-                    {m.data_hora ? new Date(m.data_hora).toLocaleString('pt-BR', { weekday:'short', day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : 'A definir'}
-                  </span>
-              }
-            </div>
-            <div className="flex items-center gap-4 justify-center">
-              <TeamBlock nome={m.mandante?.nome} label="Mandante" />
-              <div className="font-display text-3xl text-gray-500 flex-shrink-0">VS</div>
-              <TeamBlock nome={m.visitante?.nome} label="Visitante" />
-            </div>
-            {m.local && <p className="text-xs text-gray-500 text-center mt-3">📍 {m.local}</p>}
-            <div className="mt-4 flex justify-center">
-              <span className="bg-[#E8232A] group-hover:bg-[#B01B21] text-white text-sm font-bold px-6 py-2 rounded-full transition">
-                🎙️ Narrar este jogo →
-              </span>
-            </div>
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function TeamBlock({ nome, label }: { nome?: string; label: string }) {
-  return (
-    <div className="flex-1 text-center">
-      <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center text-2xl mx-auto mb-2">⚽</div>
-      <p className="font-bold text-white text-sm">{nome}</p>
-      <p className="text-xs text-gray-500">{label}</p>
-    </div>
-  )
-}
-
-// ── Painel do narrador ───────────────────────────────────────────────────────
-
-function PainelNarrador({
-  match, aba, setAba, onBack,
-}: {
-  match:   Match
-  aba:     'elencos'|'narrar'|'prejogo'|'h2h'
-  setAba:  (a: 'elencos'|'narrar'|'prejogo'|'h2h') => void
-  onBack:  () => void
-}) {
-  const mId    = match.mandante_id
-  const vId    = match.visitante_id
-  const mStats = getTeamStats(mId, match.championship_id)
-  const vStats = getTeamStats(vId, match.championship_id)
-  const mEsc   = (ESCALACOES[mId] ?? []).map(j => ({ ...j, timeId: mId, timeNome: match.mandante?.nome ?? '' }))
-  const vEsc   = (ESCALACOES[vId] ?? []).map(j => ({ ...j, timeId: vId, timeNome: match.visitante?.nome ?? '' }))
-  const h2h    = MOCK_DATA.matches.filter(m =>
-    m.status === 'finalizado' &&
-    ((m.mandante_id === mId && m.visitante_id === vId) || (m.mandante_id === vId && m.visitante_id === mId))
-  )
-
-  // ── Estado global da narração (elevado para detectar dados ao tentar sair)
-  const [eventos,   setEventos]   = useState<Evento[]>([])
-  const [placar,    setPlacar]    = useState({ m: 0, v: 0 })
-  const [showConfirmBack,  setShowConfirmBack]  = useState(false)
-  const [showFinalModal,   setShowFinalModal]   = useState(false)
-
-  function tentarVoltar() {
-    if (eventos.length > 0) setShowConfirmBack(true)
-    else onBack()
+  function getStat(pid: number): JogStats { return stats[pid] || { ...DEFAULT_STATS } }
+  function setStat(pid: number, patch: Partial<JogStats>) {
+    setStats(s => ({ ...s, [pid]: { ...getStat(pid), ...patch } }))
   }
 
-  const tabs = [
-    { key:'narrar',  label:'🔴 Narrar'   },
-    { key:'elencos', label:'📋 Elencos'  },
-    { key:'prejogo', label:'📊 Pré-Jogo' },
-    { key:'h2h',     label:'⚡ H2H'     },
-  ] as const
+  function addEvento(tipo: string, txt: string) {
+    setEventos(ev => [{ m: minuto, txt, tipo }, ...ev].slice(0, 50))
+  }
+
+  function abrirSheet(jog: any) {
+    setJogadorSheet(jog)
+    setSheetEdit({ ...getStat(jog.id) })
+  }
+
+  function salvarSheet() {
+    if (!jogadorSheet) return
+    setStat(jogadorSheet.id, sheetEdit)
+    setJogadorSheet(null)
+  }
+
+  async function gerarEscalacao() {
+    setGerando(true)
+    setView('escalacao')
+    await new Promise(r => setTimeout(r, 800))
+    const usados: number[] = []
+    function pegar(pos: string): string {
+      const c = todosJogs.find(j => !usados.includes(j.id) && j.posicao === pos)
+               || todosJogs.find(j => !usados.includes(j.id))
+      if (!c) return `Jogador, o ${apelido(pos)}`
+      usados.push(c.id)
+      const s = getStat(c.id)
+      return `${c.apelido || c.nome} (nota ${s.nota}), o ${apelido(pos)}`
+    }
+    const artEntry = Object.entries(stats)
+      .filter(([, s]) => s.gols > 0)
+      .sort(([, a], [, b]) => b.gols - a.gols)[0]
+    const artJog = artEntry ? todosJogs.find(j => j.id === Number(artEntry[0])) : null
+    const melhorJog = todosJogs.find(j => getStat(j.id).melhorJogo)
+      || [...todosJogs].sort((a, b) => getStat(b.id).nota - getStat(a.id).nota)[0]
+
+    setEscalacao(`🎙️ E AÍ GALERA, VEM AÍ A ESCALAÇÃO DIVINOTV!
+
+⬛ NA META:
+🧤 ${pegar('goleiro')}
+
+🛡️ NA ZAGA:
+📌 ${pegar('zagueiro')}
+📌 ${pegar('zagueiro')}
+📌 ${pegar('lateral')} (dir.)
+📌 ${pegar('lateral')} (esq.)
+
+⚙️ NO MEIO:
+⚡ ${pegar('volante')}
+⚡ ${pegar('volante')}
+⚡ ${pegar('meia')}
+
+🔥 NO ATAQUE:
+💥 ${pegar('meia')}
+💥 ${pegar('atacante')}
+💥 ${pegar('atacante')}
+
+━━━━━━━━━━━━━━━━━━
+🏆 Placar: ${jogo!.mandante?.nome} ${gm} × ${gv} ${jogo!.visitante?.nome}
+${artJog ? `⚽ Artilheiro: ${artJog.apelido || artJog.nome} (${getStat(artJog.id).gols} gol${getStat(artJog.id).gols > 1 ? 's' : ''})` : ''}
+${melhorJog ? `⭐ Melhor em campo: ${melhorJog.apelido || melhorJog.nome}` : ''}
+
+Isso foi Divino App! Futebol de verdade! 🎙️⚽`.trim())
+    setGerando(false)
+  }
+
+  const FASES_BTN: Record<Fase, { label: string; cor: string; txtCor: string; next: () => void }> = {
+    pre:       { label:'▶ Iniciar partida',  cor:'var(--green)',  txtCor:'#000', next: () => { setFase('primeiro'); setMinuto(1); addEvento('inicio','🟢 Partida iniciada!') }},
+    primeiro:  { label:'⏸ Intervalo',        cor:'var(--yellow)', txtCor:'#000', next: () => { setFase('intervalo'); if (timer.current) clearInterval(timer.current); addEvento('intervalo','⏸ Intervalo') }},
+    intervalo: { label:'▶ 2º Tempo',          cor:'var(--green)',  txtCor:'#000', next: () => { setFase('segundo'); setMinuto(46); addEvento('inicio','▶ Segundo tempo iniciado') }},
+    segundo:   { label:'🏁 Encerrar',         cor:'var(--red)',    txtCor:'#fff', next: () => { setFase('encerrado'); if (timer.current) clearInterval(timer.current); addEvento('fim','🏁 Jogo encerrado') }},
+    encerrado: { label:'🎙️ Gerar Escalação',  cor:'var(--t-2)',    txtCor:'#000', next: gerarEscalacao },
+  }
+
+  const btn = FASES_BTN[fase]
 
   return (
-    <div>
-      {/* Botão voltar */}
-      <button onClick={tentarVoltar} className="text-gray-500 text-sm hover:text-white mb-3 flex items-center gap-1">
-        ← Trocar jogo
-      </button>
+    <div style={{ background:'var(--bg-base)', minHeight:'100vh', maxWidth:480, margin:'0 auto', display:'flex', flexDirection:'column' }}>
 
-      {/* Alerta de confirmação ao trocar jogo */}
-      {showConfirmBack && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-[#1A1A24] border border-white/20 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-            <div className="text-3xl mb-3 text-center">⚠️</div>
-            <h3 className="text-white font-black text-center text-lg mb-2">Sair da narração?</h3>
-            <p className="text-gray-400 text-sm text-center mb-5">
-              Você tem <span className="text-[#E8232A] font-bold">{eventos.length} evento{eventos.length !== 1 ? 's' : ''}</span> registrado{eventos.length !== 1 ? 's' : ''}. Se sair agora, todos os dados serão perdidos.
+      {/* ─── HEADER ─── */}
+      <div style={{
+        position:'sticky', top:0, zIndex:100,
+        background:'rgba(7,8,12,0.97)', backdropFilter:'blur(16px)',
+        borderBottom:'0.5px solid var(--b-1)',
+      }}>
+        {/* Linha 1 */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px 6px' }}>
+          {!emJogo ? (
+            <button onClick={() => navigate(`/admin/jogo/${id}`)}
+              style={{ background:'none', border:'none', color:'var(--t-2)', fontSize:13, cursor:'pointer', padding:'4px 0' }}>
+              ← Voltar
+            </button>
+          ) : (
+            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <span className="live-dot"/>
+              <span style={{ fontSize:11, color:'var(--red)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em' }}>
+                Narração ativa
+              </span>
+            </div>
+          )}
+          <span style={{ fontSize:13, color:'var(--t-2)', fontFamily:'var(--font-display)', letterSpacing:'0.04em' }}>
+            {String(minuto).padStart(2,'0')}'
+            {acrescimo > 0 && <span style={{ color:'var(--yellow)' }}> +{acrescimo}</span>}
+          </span>
+        </div>
+
+        {/* Linha 2: placar */}
+        <div style={{ padding:'2px 16px 8px', display:'flex', alignItems:'center', gap:8 }}>
+          <span style={{ flex:1, fontSize:11, fontWeight:600, color:'var(--t-1)', textAlign:'right', lineHeight:1.2 }}>
+            {jogo.mandante?.nome}
+          </span>
+          <div style={{ display:'flex', alignItems:'center', gap:4, flexShrink:0 }}>
+            <Ctrl onClick={() => setGm(g => Math.max(0, g-1))} symbol="−" dim />
+            <button onClick={() => { setGm(g => g+1); addEvento('gol',`⚽ GOL! ${jogo.mandante?.nome}`) }}
+              style={{ width:30, height:30, background:'var(--red-dim)', border:'0.5px solid var(--red-border)', borderRadius:'var(--r-sm)', color:'var(--red)', fontSize:18, cursor:'pointer', fontWeight:700 }}>+</button>
+            <span className="display" style={{ fontSize:36, color:'var(--t-1)', minWidth:22, textAlign:'center' }}>{gm}</span>
+            <span style={{ color:'var(--t-3)', fontSize:20, fontFamily:'var(--font-display)' }}>:</span>
+            <span className="display" style={{ fontSize:36, color:'var(--t-1)', minWidth:22, textAlign:'center' }}>{gv}</span>
+            <button onClick={() => { setGv(g => g+1); addEvento('gol',`⚽ GOL! ${jogo.visitante?.nome}`) }}
+              style={{ width:30, height:30, background:'var(--red-dim)', border:'0.5px solid var(--red-border)', borderRadius:'var(--r-sm)', color:'var(--red)', fontSize:18, cursor:'pointer', fontWeight:700 }}>+</button>
+            <Ctrl onClick={() => setGv(g => Math.max(0, g-1))} symbol="−" dim />
+          </div>
+          <span style={{ flex:1, fontSize:11, fontWeight:600, color:'var(--t-1)', textAlign:'left', lineHeight:1.2 }}>
+            {jogo.visitante?.nome}
+          </span>
+        </div>
+
+        {/* Linha 3: acréscimo + fase */}
+        <div style={{ display:'flex', alignItems:'center', gap:8, padding:'0 16px 10px' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+            <span style={{ fontSize:11, color:'var(--t-3)' }}>Acrés.</span>
+            <Ctrl onClick={() => setAcrescimo(a => Math.max(0, a-1))} symbol="−" small />
+            <span style={{ width:20, textAlign:'center', fontSize:13, color:'var(--yellow)', fontWeight:700 }}>{acrescimo}'</span>
+            <Ctrl onClick={() => { setAcrescimo(a => a+1); addEvento('acrescimo',`+${acrescimo+1}' de acréscimo`) }} symbol="+" small />
+          </div>
+          <div style={{ flex:1 }}/>
+          <button onClick={btn.next} style={{
+            background: btn.cor, color: btn.txtCor,
+            border:'none', borderRadius:'var(--r-md)', padding:'8px 16px',
+            fontSize:12, fontWeight:700, cursor:'pointer',
+          }}>
+            {btn.label}
+          </button>
+        </div>
+
+        {/* Nav tabs */}
+        <div style={{ display:'flex', borderTop:'0.5px solid var(--b-1)' }}>
+          {([['narrar','Narrar'],['elenco','Elencos'],['pontuacao','Pontuação'],['escalacao','Escalação']] as const).map(([v, l]) => (
+            <button key={v} onClick={() => setView(v)} style={{
+              flex:1, padding:'10px 0', background:'none', border:'none',
+              borderBottom: view===v ? '2px solid var(--red)' : '2px solid transparent',
+              color: view===v ? 'var(--t-1)' : 'var(--t-3)',
+              fontSize:11, fontWeight:600, cursor:'pointer', letterSpacing:'0.03em',
+              textTransform:'uppercase', transition:'all 0.15s',
+            }}>{l}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* ─── VIEWS ─── */}
+      <div style={{ flex:1, overflowY:'auto', padding:16 }}>
+
+        {view === 'narrar' && (
+          <div>
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:16 }}>
+              {[
+                { label:'🟨 Amarelo', onClick: () => addEvento('amarelo','🟨 Cartão amarelo') },
+                { label:'🟥 Vermelho', onClick: () => addEvento('vermelho','🟥 Cartão vermelho') },
+                { label:'↕ Substituição', onClick: () => addEvento('sub','↕ Substituição') },
+                { label:'💬 Nota', onClick: () => addEvento('info','💬 Nota do narrador') },
+              ].map(a => (
+                <button key={a.label} onClick={a.onClick} style={{
+                  background:'var(--bg-card-2)', border:'0.5px solid var(--b-1)',
+                  borderRadius:'var(--r-sm)', padding:'7px 12px',
+                  color:'var(--t-2)', fontSize:12, fontWeight:600, cursor:'pointer',
+                }}>
+                  {a.label}
+                </button>
+              ))}
+            </div>
+            {eventos.length === 0 ? (
+              <div style={{ textAlign:'center', padding:'40px 0', color:'var(--t-3)', fontSize:13 }}>
+                {fase === 'pre' ? 'Inicie a partida para registrar eventos.' : 'Nenhum evento ainda.'}
+              </div>
+            ) : (
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                {eventos.map((e, i) => {
+                  const cor = e.tipo==='gol' ? 'var(--green)' : e.tipo==='amarelo' ? 'var(--yellow)' : e.tipo==='vermelho' ? 'var(--red)' : 'var(--t-3)'
+                  return (
+                    <div key={i} style={{
+                      display:'flex', alignItems:'flex-start', gap:10, padding:'10px 12px',
+                      background:'var(--bg-card)', borderRadius:'var(--r-md)', border:'0.5px solid var(--b-1)',
+                    }}>
+                      <span style={{ fontSize:11, color:cor, fontWeight:700, minWidth:24 }}>{String(e.m).padStart(2,'0')}'</span>
+                      <span style={{ fontSize:13, color:'var(--t-1)', flex:1 }}>{e.txt}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {view === 'elenco' && (
+          <div>
+            <div style={{ display:'flex', gap:8, marginBottom:16 }}>
+              {(['mandante','visitante'] as const).map(lado => (
+                <button key={lado} onClick={() => setAbaElenco(lado)} style={{
+                  flex:1, padding:'9px',
+                  background: abaElenco===lado ? 'var(--bg-card-2)' : 'transparent',
+                  border:`0.5px solid ${abaElenco===lado ? 'var(--b-2)' : 'var(--b-1)'}`,
+                  borderRadius:'var(--r-md)', color: abaElenco===lado ? 'var(--t-1)' : 'var(--t-3)',
+                  fontSize:12, fontWeight:600, cursor:'pointer',
+                }}>
+                  {lado === 'mandante' ? jogo.mandante?.nome : jogo.visitante?.nome}
+                </button>
+              ))}
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+              {(abaElenco === 'mandante' ? mandJogs : visitJogs).map((jog: any) => {
+                const s = getStat(jog.id)
+                const notaCor = s.nota>=8 ? 'var(--green)' : s.nota>=6 ? 'var(--yellow)' : 'var(--red)'
+                return (
+                  <button key={jog.id} onClick={() => abrirSheet(jog)} style={{
+                    display:'flex', alignItems:'center', gap:12, padding:'12px 14px',
+                    background:'var(--bg-card)', border:'0.5px solid var(--b-1)',
+                    borderRadius:'var(--r-md)', cursor:'pointer', textAlign:'left', width:'100%',
+                  }}>
+                    <div style={{ width:36, height:36, borderRadius:'50%', background:'var(--bg-card-2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:700, color:'var(--t-2)', flexShrink:0 }}>
+                      {(jog.apelido||jog.nome).slice(0,2).toUpperCase()}
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:14, fontWeight:600, color:'var(--t-1)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                        {jog.apelido||jog.nome}
+                      </div>
+                      <div style={{ fontSize:11, color:'var(--t-3)', textTransform:'capitalize' }}>
+                        {jog.posicao}
+                        {s.gols > 0 && ` · ⚽${s.gols}`}
+                        {s.assistencias > 0 && ` · 🅰${s.assistencias}`}
+                        {s.amarelo && ' · 🟨'}{s.vermelho && ' · 🟥'}
+                      </div>
+                    </div>
+                    <div className="rating-circle" style={{ width:36, height:36, flexShrink:0, borderColor:notaCor, color:notaCor, fontSize:13 }}>
+                      {s.nota}
+                    </div>
+                  </button>
+                )
+              })}
+              {(abaElenco === 'mandante' ? mandJogs : visitJogs).length === 0 && (
+                <div style={{ textAlign:'center', padding:'32px 0', color:'var(--t-3)', fontSize:13 }}>Nenhum jogador cadastrado.</div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {view === 'pontuacao' && (
+          <div>
+            <p style={{ fontSize:12, color:'var(--t-3)', marginBottom:16, textAlign:'center' }}>
+              Gol=8 · Assist=5 · Defesa=3 · Nota±2/pt · Amarelo−2 · Vermelho−5
             </p>
-            <div className="flex flex-col gap-2">
-              <button onClick={onBack}
-                className="w-full bg-[#E8232A] hover:bg-[#B01B21] text-white font-bold py-3 rounded-xl transition">
-                Sair mesmo assim
-              </button>
-              <button onClick={() => setShowConfirmBack(false)}
-                className="w-full bg-white/10 hover:bg-white/15 text-white font-bold py-3 rounded-xl transition">
-                Continuar narrando
-              </button>
-            </div>
+            {[...todosJogs].sort((a, b) => pontos(getStat(b.id)) - pontos(getStat(a.id))).map((jog, i) => {
+              const s = getStat(jog.id)
+              const pts = pontos(s)
+              const nomeTime = mandJogs.some((m: any) => m.id === jog.id) ? jogo.mandante?.nome : jogo.visitante?.nome
+              return (
+                <div key={jog.id} style={{
+                  display:'flex', alignItems:'center', gap:12, padding:'12px 14px',
+                  background:'var(--bg-card)', border:'0.5px solid var(--b-1)',
+                  borderRadius:'var(--r-md)', marginBottom:6,
+                }}>
+                  <span className="display" style={{ fontSize:22, color: i<3 ? 'var(--yellow)' : 'var(--t-3)', width:24, textAlign:'center' }}>{i+1}</span>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:14, fontWeight:600, color:'var(--t-1)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{jog.apelido||jog.nome}</div>
+                    <div style={{ fontSize:11, color:'var(--t-3)' }}>{nomeTime}{s.gols>0&&` · ⚽${s.gols}`}{s.melhorJogo&&' · ⭐'}</div>
+                  </div>
+                  <div style={{ textAlign:'right', flexShrink:0 }}>
+                    <div className="display" style={{ fontSize:24, color: pts>0 ? 'var(--green)' : pts<0 ? 'var(--red)' : 'var(--t-3)' }}>
+                      {pts>0?`+${pts}`:pts}
+                    </div>
+                    <div style={{ fontSize:10, color:'var(--t-3)' }}>pts</div>
+                  </div>
+                </div>
+              )
+            })}
+            {todosJogs.length === 0 && <div style={{ textAlign:'center', padding:'40px 0', color:'var(--t-3)', fontSize:13 }}>Nenhum jogador no elenco.</div>}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Modal de finalização */}
-      {showFinalModal && (
-        <FinalizarModal
-          match={match}
-          placar={placar}
-          eventos={eventos}
-          onConfirmar={onBack}
-          onCancelar={() => setShowFinalModal(false)}
-        />
-      )}
-
-      {/* Header do jogo */}
-      <div className="bg-gradient-to-r from-[#1A0506] to-[#0E0F15] rounded-2xl p-4 border border-white/5 mb-4">
-        <p className="text-xs text-gray-500 text-center mb-2">{match.championship?.nome} · Rodada {match.rodada}</p>
-        <div className="flex items-center gap-3 justify-center">
-          <p className="font-bold text-white flex-1 text-right text-sm">{match.mandante?.nome}</p>
-          {eventos.length > 0
-            ? <span className="font-display text-3xl text-white flex-shrink-0 px-2">{placar.m} : {placar.v}</span>
-            : <span className="font-display text-3xl text-gray-600 flex-shrink-0 px-2">VS</span>
-          }
-          <p className="font-bold text-white flex-1 text-sm">{match.visitante?.nome}</p>
-        </div>
-        {match.local && <p className="text-xs text-gray-600 text-center mt-1">📍 {match.local}</p>}
-        {/* Botão Finalizar */}
-        <div className="mt-3 flex justify-center">
-          <button onClick={() => setShowFinalModal(true)}
-            className="bg-[#E8232A]/15 hover:bg-[#E8232A]/25 border border-[#E8232A]/30 text-[#E8232A] text-xs font-bold px-5 py-2 rounded-full transition flex items-center gap-2">
-            🏁 Finalizar Narração
-          </button>
-        </div>
+        {view === 'escalacao' && (
+          <div>
+            {gerando ? (
+              <div style={{ textAlign:'center', padding:'60px 0', color:'var(--t-3)' }}>
+                <div style={{ fontSize:32, marginBottom:12 }}>🎙️</div>
+                <div style={{ fontSize:14 }}>Gerando escalação DivinoTV...</div>
+              </div>
+            ) : escalacao ? (
+              <div>
+                <pre style={{
+                  whiteSpace:'pre-wrap', fontFamily:'var(--font-body)', fontSize:14,
+                  color:'var(--t-1)', lineHeight:1.7, background:'var(--bg-card)',
+                  border:'0.5px solid var(--b-1)', borderRadius:'var(--r-lg)', padding:16, marginBottom:16,
+                }}>{escalacao}</pre>
+                <div style={{ display:'flex', gap:8 }}>
+                  <button onClick={() => { navigator.clipboard.writeText(escalacao); setCopiado(true); setTimeout(()=>setCopiado(false),2000) }}
+                    className="btn btn-primary btn-sm" style={{ flex:1 }}>
+                    {copiado ? '✓ Copiado!' : 'Copiar texto'}
+                  </button>
+                  <button onClick={gerarEscalacao} className="btn btn-ghost btn-sm" style={{ flex:1 }}>Gerar novamente</button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ textAlign:'center', padding:'60px 0', color:'var(--t-3)' }}>
+                <div style={{ fontSize:32, marginBottom:12 }}>🎙️</div>
+                <div style={{ fontSize:14, marginBottom:20 }}>
+                  {fase === 'encerrado' ? 'Clique para gerar a escalação DivinoTV.' : 'A escalação é gerada após encerrar a partida.'}
+                </div>
+                {fase === 'encerrado' && <button onClick={gerarEscalacao} className="btn btn-primary btn-sm">Gerar escalação</button>}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-white/10 mb-4 overflow-x-auto">
-        {tabs.map(t => (
-          <button key={t.key} onClick={() => setAba(t.key)}
-            className={`px-4 py-3 text-sm font-bold border-b-2 whitespace-nowrap transition ${
-              aba === t.key ? 'border-[#E8232A] text-white' : 'border-transparent text-gray-600 hover:text-gray-300'
-            }`}>{t.label}</button>
-        ))}
-      </div>
-
-      {aba === 'narrar'  && (
-        <NarrarTab
-          match={match} mEsc={mEsc} vEsc={vEsc}
-          eventos={eventos} setEventos={setEventos}
-          placar={placar}   setPlacar={setPlacar}
-          onFinalizar={() => setShowFinalModal(true)}
-        />
-      )}
-      {aba === 'elencos' && <ElencosTab mEsc={mEsc} vEsc={vEsc} mNome={match.mandante?.nome??''} vNome={match.visitante?.nome??''} />}
-      {aba === 'prejogo' && <PrejogTab mNome={match.mandante?.nome??''} vNome={match.visitante?.nome??''} mStats={mStats} vStats={vStats} />}
-      {aba === 'h2h'     && <H2HTab h2h={h2h} mNome={match.mandante?.nome??''} vNome={match.visitante?.nome??''} />}
-    </div>
-  )
-}
-
-// ── Modal Finalizar Narração ─────────────────────────────────────────────────
-
-function FinalizarModal({ match, placar, eventos, onConfirmar, onCancelar }: {
-  match:       Match
-  placar:      { m: number; v: number }
-  eventos:     Evento[]
-  onConfirmar: () => void
-  onCancelar:  () => void
-}) {
-  const gols     = eventos.filter(e => e.acao.key === 'gol').length
-  const cartoes  = eventos.filter(e => e.acao.key === 'cartao_amarelo' || e.acao.key === 'cartao_vermelho').length
-  const passes   = eventos.filter(e => e.acao.key === 'passe_certo' || e.acao.key === 'passe_errado').length
-
-  // top Cartola scorer
-  const pts: Record<string, number> = {}
-  eventos.forEach(e => {
-    const k = `${e.timeId}-${e.jogadorNome}`
-    pts[k] = (pts[k] ?? 0) + e.acao.pts
-  })
-  const topEntry = Object.entries(pts).sort(([,a],[,b]) => b - a)[0]
-  const topNome  = topEntry ? topEntry[0].split('-').slice(1).join('-') : null
-  const topPts   = topEntry ? topEntry[1] : 0
-
-  return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-[#0E0F15] border border-white/20 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-[#1A0506] to-[#0E1520] p-5 text-center border-b border-white/10">
-          <div className="text-4xl mb-2">🏁</div>
-          <h2 className="text-white font-black text-xl">Finalizar Narração</h2>
-          <p className="text-gray-400 text-xs mt-1">{match.championship?.nome} · Rodada {match.rodada}</p>
-        </div>
-
-        {/* Placar final */}
-        <div className="p-5">
-          <div className="bg-[#111811] rounded-2xl p-4 mb-4 text-center">
-            <p className="text-xs text-gray-500 mb-1">Placar Final</p>
-            <div className="flex items-center justify-center gap-3">
-              <span className="text-white text-sm font-bold flex-1 text-right truncate">{match.mandante?.nome}</span>
-              <span className="font-display text-4xl text-white px-2">{placar.m} : {placar.v}</span>
-              <span className="text-white text-sm font-bold flex-1 text-left truncate">{match.visitante?.nome}</span>
+      {/* ─── JOGADOR SHEET ─── */}
+      {jogadorSheet && (
+        <div onClick={() => setJogadorSheet(null)}
+          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:200, display:'flex', alignItems:'flex-end' }}>
+          <div onClick={e => e.stopPropagation()} className="animate-slide-up"
+            style={{ background:'var(--bg-sheet)', borderRadius:'var(--r-xl) var(--r-xl) 0 0', padding:20, width:'100%', maxWidth:480, margin:'0 auto' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20 }}>
+              <div style={{ width:44, height:44, borderRadius:'50%', background:'var(--bg-card-2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:700, color:'var(--t-2)' }}>
+                {(jogadorSheet.apelido||jogadorSheet.nome).slice(0,2).toUpperCase()}
+              </div>
+              <div>
+                <div style={{ fontSize:16, fontWeight:700, color:'var(--t-1)' }}>{jogadorSheet.apelido||jogadorSheet.nome}</div>
+                <div style={{ fontSize:12, color:'var(--t-3)', textTransform:'capitalize' }}>{jogadorSheet.posicao}</div>
+              </div>
             </div>
-          </div>
 
-          {/* Estatísticas */}
-          <div className="grid grid-cols-3 gap-2 mb-4">
-            {[
-              { label:'Eventos', value: eventos.length, icon:'📋' },
-              { label:'Gols',    value: gols,           icon:'⚽' },
-              { label:'Cartões', value: cartoes,         icon:'🟨' },
-            ].map(s => (
-              <div key={s.label} className="bg-[#111811] rounded-xl p-3 text-center">
-                <div className="text-xl mb-0.5">{s.icon}</div>
-                <div className="font-display text-2xl text-white">{s.value}</div>
-                <div className="text-gray-600 text-xs">{s.label}</div>
+            {([['Gols','gols'],['Assistências','assistencias'],['Defesas','defesas']] as const).map(([label, key]) => (
+              <div key={key} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 0', borderBottom:'0.5px solid var(--b-1)' }}>
+                <span style={{ fontSize:14, color:'var(--t-2)' }}>{label}</span>
+                <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                  <button onClick={() => setSheetEdit(e => ({ ...e, [key]: Math.max(0, e[key]-1) }))}
+                    style={{ width:32, height:32, background:'var(--bg-card-2)', border:'0.5px solid var(--b-1)', borderRadius:'var(--r-sm)', color:'var(--t-1)', fontSize:18, cursor:'pointer' }}>−</button>
+                  <span style={{ width:20, textAlign:'center', fontSize:16, fontWeight:700, color:'var(--t-1)' }}>{sheetEdit[key]}</span>
+                  <button onClick={() => setSheetEdit(e => ({ ...e, [key]: e[key]+1 }))}
+                    style={{ width:32, height:32, background:'var(--bg-card-2)', border:'0.5px solid var(--b-1)', borderRadius:'var(--r-sm)', color:'var(--t-1)', fontSize:18, cursor:'pointer' }}>+</button>
+                </div>
               </div>
             ))}
-          </div>
 
-          {passes > 0 && (
-            <p className="text-xs text-gray-600 text-center mb-3">{passes} passes registrados</p>
-          )}
-
-          {/* MVP Cartola */}
-          {topNome && (
-            <div className="bg-[#111811] border border-[#F5B800]/20 rounded-xl p-3 flex items-center gap-3 mb-4">
-              <span className="text-2xl">🏅</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-[#F5B800] font-bold uppercase tracking-wider">MVP Cartola</p>
-                <p className="text-white font-bold truncate">{topNome}</p>
-              </div>
-              <span className="font-display text-xl font-bold text-[#00D68F]">
-                {topPts > 0 ? '+' : ''}{topPts.toFixed(1)}
-              </span>
+            <div style={{ display:'flex', gap:8, padding:'12px 0', borderBottom:'0.5px solid var(--b-1)' }}>
+              {[
+                { key:'amarelo' as const, label:'🟨 Amarelo', active: sheetEdit.amarelo, cor:'rgba(245,184,0,0.15)', bord:'rgba(245,184,0,0.4)', txt:'var(--yellow)' },
+                { key:'vermelho' as const, label:'🟥 Vermelho', active: sheetEdit.vermelho, cor:'rgba(232,35,42,0.15)', bord:'var(--red-border)', txt:'var(--red)' },
+                { key:'melhorJogo' as const, label:'⭐ Melhor', active: sheetEdit.melhorJogo, cor:'rgba(245,184,0,0.15)', bord:'rgba(245,184,0,0.4)', txt:'var(--yellow)' },
+              ].map(({ key, label, active, cor, bord, txt }) => (
+                <button key={key} onClick={() => setSheetEdit(e => ({ ...e, [key]: !e[key] }))}
+                  style={{ flex:1, padding:'9px', background: active ? cor : 'var(--bg-card-2)', border:`0.5px solid ${active?bord:'var(--b-1)'}`, borderRadius:'var(--r-sm)', color: active ? txt : 'var(--t-3)', fontSize:12, fontWeight:600, cursor:'pointer' }}>
+                  {label}
+                </button>
+              ))}
             </div>
-          )}
 
-          {eventos.length === 0 && (
-            <p className="text-gray-500 text-xs text-center mb-4">Nenhum evento foi registrado nesta narração.</p>
-          )}
-
-          <p className="text-gray-500 text-xs text-center mb-5">
-            Ao confirmar, a narração será encerrada. Esta ação não pode ser desfeita.
-          </p>
-
-          <div className="flex flex-col gap-2">
-            <button onClick={onConfirmar}
-              className="w-full bg-green-600 hover:bg-green-500 text-white font-black py-3.5 rounded-xl transition flex items-center justify-center gap-2">
-              ✓ Confirmar e Encerrar
-            </button>
-            <button onClick={onCancelar}
-              className="w-full bg-white/10 hover:bg-white/15 text-white font-bold py-3 rounded-xl transition">
-              Continuar narrando
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── ABA NARRAR (live) ────────────────────────────────────────────────────────
-
-function NarrarTab({ match, mEsc, vEsc, eventos, setEventos, placar, setPlacar, onFinalizar }: {
-  match:       Match
-  mEsc:        JogLive[]
-  vEsc:        JogLive[]
-  eventos:     Evento[]
-  setEventos:  React.Dispatch<React.SetStateAction<Evento[]>>
-  placar:      { m: number; v: number }
-  setPlacar:   React.Dispatch<React.SetStateAction<{ m: number; v: number }>>
-  onFinalizar: () => void
-}) {
-  const [minuto,      setMinuto]      = useState(0)
-  const [selecionado, setSelecionado] = useState<JogLive | null>(null)
-  const [nextId,      setNextId]      = useState(1)
-
-  const todosJogadores = [...mEsc, ...vEsc]
-
-  const pontosJogador = useCallback((j: JogLive) => {
-    return eventos
-      .filter(e => e.jogadorNome === j.nome && e.timeId === j.timeId)
-      .reduce((s, e) => s + e.acao.pts, 0)
-  }, [eventos])
-
-  function registrar(acao: Acao) {
-    if (!selecionado) return
-    const ev: Evento = {
-      id: nextId, minuto, timeId: selecionado.timeId,
-      timeNome: selecionado.timeNome, jogadorNome: selecionado.nome,
-      jogadorNumero: selecionado.numero, acao,
-    }
-    setEventos(prev => [ev, ...prev])
-    setNextId(n => n + 1)
-    if (acao.key === 'gol') {
-      if (selecionado.timeId === match.mandante_id) setPlacar(p => ({ ...p, m: p.m + 1 }))
-      else setPlacar(p => ({ ...p, v: p.v + 1 }))
-    }
-    if (acao.key === 'gol_contra') {
-      if (selecionado.timeId === match.mandante_id) setPlacar(p => ({ ...p, v: p.v + 1 }))
-      else setPlacar(p => ({ ...p, m: p.m + 1 }))
-    }
-    setSelecionado(null)
-  }
-
-  function removerEvento(id: number) {
-    const ev = eventos.find(e => e.id === id)
-    if (ev) {
-      if (ev.acao.key === 'gol') {
-        if (ev.timeId === match.mandante_id) setPlacar(p => ({ ...p, m: Math.max(0, p.m - 1) }))
-        else setPlacar(p => ({ ...p, v: Math.max(0, p.v - 1) }))
-      }
-      if (ev.acao.key === 'gol_contra') {
-        if (ev.timeId === match.mandante_id) setPlacar(p => ({ ...p, v: Math.max(0, p.v - 1) }))
-        else setPlacar(p => ({ ...p, m: Math.max(0, p.m - 1) }))
-      }
-    }
-    setEventos(prev => prev.filter(e => e.id !== id))
-  }
-
-  const ranking = [...todosJogadores]
-    .map(j => ({ ...j, pts: pontosJogador(j) }))
-    .filter(j => j.titular)
-    .sort((a, b) => b.pts - a.pts)
-
-  return (
-    <div className="space-y-4">
-
-      {/* Placar + Timer */}
-      <div className="bg-[#0A0F0A] border border-white/10 rounded-2xl p-4">
-        <div className="flex items-center gap-3 mb-3">
-          <p className="text-xs text-gray-500 flex-1 text-right truncate">{match.mandante?.nome}</p>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="font-display text-4xl text-white">{placar.m}</span>
-            <span className="text-gray-600">:</span>
-            <span className="font-display text-4xl text-white">{placar.v}</span>
-          </div>
-          <p className="text-xs text-gray-500 flex-1 truncate">{match.visitante?.nome}</p>
-        </div>
-        <div className="flex items-center justify-center gap-2 flex-wrap">
-          <span className="text-xs text-gray-500">⏱️</span>
-          <span className="font-display text-xl text-white w-10 text-center">{minuto}'</span>
-          <button onClick={() => setMinuto(m => m + 1)}
-            className="bg-white/10 hover:bg-white/15 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">+1'</button>
-          <button onClick={() => setMinuto(m => m + 5)}
-            className="bg-white/10 hover:bg-white/15 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">+5'</button>
-          <button onClick={() => setMinuto(m => Math.max(0, m - 1))}
-            className="bg-white/10 hover:bg-white/15 text-gray-400 text-xs font-bold px-3 py-1.5 rounded-lg transition">−1'</button>
-          <input type="number" value={minuto} onChange={e => setMinuto(Math.max(0, Number(e.target.value)))}
-            className="w-14 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-white text-xs text-center outline-none" />
-        </div>
-      </div>
-
-      {/* Seleção de jogadores */}
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 truncate">{match.mandante?.nome}</p>
-          <div className="space-y-1">
-            {mEsc.filter(j => j.titular).sort((a,b) => a.numero - b.numero).map(j => (
-              <JogadorBtn key={j.numero} j={j} pts={pontosJogador(j)}
-                selected={selecionado?.nome === j.nome && selecionado?.timeId === j.timeId}
-                onClick={() => setSelecionado(s => s?.nome === j.nome && s.timeId === j.timeId ? null : j)}
-                cor="border-[#E8232A]/40" />
-            ))}
-            <p className="text-xs text-gray-600 mt-1 px-1">Reservas</p>
-            {mEsc.filter(j => !j.titular).map(j => (
-              <JogadorBtn key={j.numero} j={j} pts={pontosJogador(j)} dim
-                selected={selecionado?.nome === j.nome && selecionado?.timeId === j.timeId}
-                onClick={() => setSelecionado(s => s?.nome === j.nome && s.timeId === j.timeId ? null : j)} />
-            ))}
-          </div>
-        </div>
-        <div>
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 truncate">{match.visitante?.nome}</p>
-          <div className="space-y-1">
-            {vEsc.filter(j => j.titular).sort((a,b) => a.numero - b.numero).map(j => (
-              <JogadorBtn key={j.numero} j={j} pts={pontosJogador(j)}
-                selected={selecionado?.nome === j.nome && selecionado?.timeId === j.timeId}
-                onClick={() => setSelecionado(s => s?.nome === j.nome && s.timeId === j.timeId ? null : j)}
-                cor="border-[#4B9FFF]/40" />
-            ))}
-            <p className="text-xs text-gray-600 mt-1 px-1">Reservas</p>
-            {vEsc.filter(j => !j.titular).map(j => (
-              <JogadorBtn key={j.numero} j={j} pts={pontosJogador(j)} dim
-                selected={selecionado?.nome === j.nome && selecionado?.timeId === j.timeId}
-                onClick={() => setSelecionado(s => s?.nome === j.nome && s.timeId === j.timeId ? null : j)} />
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Painel de ações */}
-      {selecionado && (
-        <div className="bg-[#0E0F15] border border-white/10 rounded-2xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <span className="text-white font-bold">{selecionado.nome}</span>
-              <span className="text-gray-500 text-sm ml-2">#{selecionado.numero} · {selecionado.posicao}</span>
-              <span className="text-xs text-gray-600 ml-2">{selecionado.timeNome}</span>
-            </div>
-            <button onClick={() => setSelecionado(null)} className="text-gray-500 hover:text-white text-lg leading-none">✕</button>
-          </div>
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-            {ACOES.map(a => (
-              <button key={a.key} onClick={() => registrar(a)}
-                className={`${a.cor} hover:opacity-90 rounded-xl py-3 px-2 text-center transition active:scale-95`}>
-                <div className="text-xl mb-0.5">{a.icone}</div>
-                <div className="text-white text-xs font-bold leading-tight">{a.label}</div>
-                <div className={`text-xs mt-0.5 font-mono ${a.pts >= 0 ? 'text-green-300' : 'text-red-300'}`}>
-                  {a.pts > 0 ? '+' : ''}{a.pts}
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {!selecionado && (
-        <p className="text-gray-600 text-xs text-center py-2">
-          ↑ Selecione um jogador para registrar um evento
-        </p>
-      )}
-
-      {/* Botão Finalizar flutuante quando há eventos */}
-      {eventos.length > 0 && (
-        <button onClick={onFinalizar}
-          className="w-full bg-green-700 hover:bg-green-600 text-white font-black py-3.5 rounded-2xl transition flex items-center justify-center gap-2">
-          🏁 Finalizar Narração ({eventos.length} evento{eventos.length !== 1 ? 's' : ''})
-        </button>
-      )}
-
-      {/* Ranking Cartola */}
-      {eventos.length > 0 && (
-        <div className="bg-[#111811] border border-white/10 rounded-2xl overflow-hidden">
-          <p className="px-4 py-2 text-xs font-bold text-gray-500 uppercase tracking-wider border-b border-white/5">
-            🏅 Ranking Cartola ({eventos.length} evento{eventos.length > 1 ? 's' : ''})
-          </p>
-          {ranking.filter(j => j.pts !== 0).slice(0, 8).map((j, i) => {
-            const cor = j.pts >= 7 ? '#00D68F' : j.pts >= 4 ? '#F5B800' : j.pts >= 0 ? '#ffffff' : '#E8232A'
-            return (
-              <div key={`${j.timeId}-${j.numero}`}
-                className="flex items-center gap-3 px-4 py-2 border-b border-white/5 last:border-0">
-                <span className={`font-display text-lg w-5 text-center ${i < 3 ? 'text-[#F5B800]' : 'text-gray-600'}`}>{i+1}</span>
-                <span className="font-display text-base text-[#F5B800] w-6 text-center">{j.numero}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-white text-sm font-bold truncate">{j.nome}</p>
-                  <p className="text-gray-600 text-xs">{j.timeNome}</p>
-                </div>
-                <span className="font-display text-xl font-bold" style={{ color: cor }}>
-                  {j.pts > 0 ? '+' : ''}{j.pts.toFixed(1)}
+            <div style={{ padding:'12px 0', marginBottom:16 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+                <span style={{ fontSize:14, color:'var(--t-2)' }}>Nota</span>
+                <span className="display" style={{ fontSize:28, color: sheetEdit.nota>=8 ? 'var(--green)' : sheetEdit.nota>=6 ? 'var(--yellow)' : 'var(--red)' }}>
+                  {sheetEdit.nota}
                 </span>
               </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Log de eventos */}
-      {eventos.length > 0 && (
-        <div className="bg-[#111811] border border-white/10 rounded-2xl overflow-hidden">
-          <p className="px-4 py-2 text-xs font-bold text-gray-500 uppercase tracking-wider border-b border-white/5">
-            📋 Eventos registrados
-          </p>
-          {eventos.map(ev => (
-            <div key={ev.id} className="flex items-center gap-3 px-4 py-2.5 border-b border-white/5 last:border-0">
-              <span className="text-[#F5B800] font-display text-sm w-8 flex-shrink-0">{ev.minuto}'</span>
-              <span className="text-xl flex-shrink-0">{ev.acao.icone}</span>
-              <div className="flex-1 min-w-0">
-                <span className="text-white text-sm font-bold">{ev.jogadorNome} </span>
-                <span className="text-gray-500 text-xs">#{ev.jogadorNumero} · {ev.timeNome}</span>
+              <input type="range" min={1} max={10} step={0.5} value={sheetEdit.nota}
+                onChange={e => setSheetEdit(ed => ({ ...ed, nota: Number(e.target.value) }))}
+                style={{ width:'100%', accentColor:'var(--red)' }} />
+              <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:'var(--t-3)', marginTop:2 }}>
+                <span>1</span><span>5</span><span>10</span>
               </div>
-              <span className={`font-mono text-sm font-bold flex-shrink-0 ${ev.acao.pts >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {ev.acao.pts > 0 ? '+' : ''}{ev.acao.pts}
-              </span>
-              <button onClick={() => removerEvento(ev.id)}
-                className="text-gray-600 hover:text-red-400 transition text-sm flex-shrink-0" title="Desfazer">✕</button>
             </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
 
-function JogadorBtn({ j, pts, selected, onClick, cor, dim }: {
-  j: JogLive; pts: number; selected: boolean; onClick: () => void; cor?: string; dim?: boolean
-}) {
-  const ptsCor = pts > 5 ? 'text-green-400' : pts < 0 ? 'text-red-400' : 'text-gray-500'
-  return (
-    <button onClick={onClick}
-      className={`w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-left transition border ${
-        selected
-          ? `${cor ?? 'border-white/30'} bg-white/10`
-          : 'border-transparent hover:bg-white/5'
-      } ${dim ? 'opacity-50' : ''}`}>
-      <span className="font-display text-sm text-[#F5B800] w-5 flex-shrink-0">{j.numero}</span>
-      <span className="text-white text-xs flex-1 truncate font-medium">{j.nome}</span>
-      {pts !== 0 && <span className={`text-xs font-bold flex-shrink-0 ${ptsCor}`}>{pts > 0 ? '+' : ''}{pts.toFixed(1)}</span>}
-    </button>
-  )
-}
-
-// ── ABA ELENCOS ──────────────────────────────────────────────────────────────
-
-function ElencosTab({ mEsc, vEsc, mNome, vNome }: {
-  mEsc: JogLive[]; vEsc: JogLive[]; mNome: string; vNome: string
-}) {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <ElencoPanel nome={mNome} jogadores={mEsc} isHome />
-      <ElencoPanel nome={vNome} jogadores={vEsc} />
-    </div>
-  )
-}
-
-function ElencoPanel({ nome, jogadores, isHome }: { nome:string; jogadores:JogLive[]; isHome?:boolean }) {
-  const cor   = isHome ? 'text-[#E8232A]' : 'text-[#4B9FFF]'
-  const borda = isHome ? 'border-[#E8232A]/30' : 'border-[#4B9FFF]/30'
-  const titulares = jogadores.filter(j => j.titular).sort((a,b) => a.numero - b.numero)
-  const reservas  = jogadores.filter(j => !j.titular)
-  return (
-    <div className={`bg-[#111811] border ${borda} rounded-2xl overflow-hidden`}>
-      <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between">
-        <h3 className={`font-bold text-sm ${cor}`}>{nome}</h3>
-        <span className="text-xs text-gray-500">{isHome ? 'Mandante' : 'Visitante'}</span>
-      </div>
-      <div className="p-3">
-        <p className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-2 px-1">Titulares</p>
-        <div className="space-y-1 mb-3">
-          {titulares.map(j => (
-            <div key={j.numero} className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-white/5 transition">
-              <span className="w-7 text-center font-display text-lg text-[#F5B800] flex-shrink-0">{j.numero}</span>
-              <span className="font-bold text-white text-sm flex-1">{j.nome}</span>
-              <span className="text-xs text-gray-500 flex-shrink-0">{j.posicao}</span>
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={() => setJogadorSheet(null)} className="btn btn-ghost btn-sm" style={{ flex:1 }}>Cancelar</button>
+              <button onClick={salvarSheet} className="btn btn-primary btn-sm" style={{ flex:1 }}>Salvar</button>
             </div>
-          ))}
-        </div>
-        <p className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-2 px-1">Reservas</p>
-        <div className="space-y-1 opacity-60">
-          {reservas.map(j => (
-            <div key={j.numero} className="flex items-center gap-3 px-2 py-1.5">
-              <span className="w-7 text-center font-display text-base text-gray-600 flex-shrink-0">{j.numero}</span>
-              <span className="text-white text-sm flex-1">{j.nome}</span>
-              <span className="text-xs text-gray-600 flex-shrink-0">{j.posicao}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── ABA PRÉ-JOGO ─────────────────────────────────────────────────────────────
-
-type Stats = ReturnType<typeof getTeamStats>
-
-function PrejogTab({ mNome, vNome, mStats, vStats }: {
-  mNome: string; vNome: string; mStats: Stats; vStats: Stats
-}) {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <StatsPanel nome={mNome} stats={mStats} />
-      <StatsPanel nome={vNome} stats={vStats} />
-    </div>
-  )
-}
-
-function StatsPanel({ nome, stats }: { nome: string; stats: Stats }) {
-  const total = stats.wins + stats.draws + stats.losses
-  const aprv  = total > 0 ? Math.round((stats.wins * 3) / (total * 3) * 100) : 0
-  return (
-    <div className="bg-[#111811] border border-white/10 rounded-2xl overflow-hidden">
-      <div className="px-4 py-3 border-b border-white/5">
-        <h3 className="font-bold text-white text-sm">{nome}</h3>
-      </div>
-      <div className="p-4 space-y-4">
-        <div>
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Aproveitamento</p>
-          <div className="grid grid-cols-5 gap-1 text-center mb-2">
-            {[
-              { v:stats.wins,   l:'V', c:'text-green-400 bg-green-500/10'  },
-              { v:stats.draws,  l:'E', c:'text-yellow-400 bg-yellow-500/10' },
-              { v:stats.losses, l:'D', c:'text-red-400 bg-red-500/10'      },
-              { v:stats.gf,     l:'GP',c:'text-white bg-white/5'           },
-              { v:stats.gc,     l:'GC',c:'text-gray-400 bg-white/5'        },
-            ].map(x => (
-              <div key={x.l} className={`rounded-xl py-2 ${x.c}`}>
-                <div className="font-display text-xl">{x.v}</div>
-                <div className="text-xs">{x.l}</div>
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
-              <div className="h-full bg-green-500 rounded-full" style={{ width:`${aprv}%` }} />
-            </div>
-            <span className="text-xs text-green-400 font-bold">{aprv}%</span>
           </div>
         </div>
-
-        <div>
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">⚽ Artilheiros</p>
-          {stats.topArtilheiros.length === 0
-            ? <p className="text-gray-600 text-xs">Sem gols registrados</p>
-            : stats.topArtilheiros.map(([n, g]) => (
-              <div key={n} className="flex items-center gap-2 py-1.5 border-b border-white/5 last:border-0">
-                <span className="text-white text-sm flex-1">{n}</span>
-                <span className="text-[#00D68F] font-bold"><span className="font-display text-lg">{g}</span> gol{g!==1?'s':''}</span>
-              </div>
-            ))
-          }
-        </div>
-
-        <div>
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">🟨 Cartões</p>
-          {Object.keys(stats.cartoesMap).length === 0
-            ? <p className="text-gray-600 text-xs">Sem cartões</p>
-            : Object.entries(stats.cartoesMap).map(([n, c]) => (
-              <div key={n} className="flex items-center gap-2 py-1.5 border-b border-white/5 last:border-0">
-                <span className="text-white text-sm flex-1">{n}</span>
-                <div className="flex gap-1">
-                  {c.amarelo > 0 && <span className="bg-yellow-400/15 text-yellow-400 text-xs font-bold px-1.5 py-0.5 rounded">🟨{c.amarelo}</span>}
-                  {c.vermelho > 0 && <span className="bg-red-400/15 text-red-400 text-xs font-bold px-1.5 py-0.5 rounded">🟥{c.vermelho}</span>}
-                </div>
-              </div>
-            ))
-          }
-        </div>
-
-        <div>
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">📅 Últimos resultados</p>
-          {stats.ultimos.length === 0
-            ? <p className="text-gray-600 text-xs">Sem jogos anteriores</p>
-            : <div className="space-y-1.5">
-                {stats.ultimos.map((r, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 ${
-                      r.res==='V'?'bg-green-500/20 text-green-400':r.res==='E'?'bg-yellow-500/20 text-yellow-400':'bg-red-500/20 text-red-400'
-                    }`}>{r.res}</span>
-                    <span className="text-gray-400 text-xs flex-1 truncate">{r.oponente}</span>
-                    <span className="text-white text-xs font-bold">{r.tf}×{r.ta}</span>
-                  </div>
-                ))}
-              </div>
-          }
-        </div>
-      </div>
+      )}
     </div>
   )
 }
 
-// ── ABA H2H ──────────────────────────────────────────────────────────────────
-
-function H2HTab({ h2h, mNome, vNome }: { h2h: Match[]; mNome: string; vNome: string }) {
-  let w1 = 0, w2 = 0, d = 0
-  h2h.forEach(m => {
-    if (!m.resultado) return
-    const gm = m.resultado.gols_mandante, gv = m.resultado.gols_visitante
-    if (gm > gv) w1++; else if (gv > gm) w2++; else d++
-  })
+function Ctrl({ onClick, symbol, dim, small }: { onClick: () => void; symbol: string; dim?: boolean; small?: boolean }) {
+  const size = small ? 22 : 28
   return (
-    <div>
-      <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
-        Confrontos Diretos ({h2h.length})
-      </h3>
-      {h2h.length === 0 && (
-        <p className="text-gray-600 text-sm text-center py-10 bg-[#111811] rounded-2xl">
-          Sem confrontos diretos anteriores.
-        </p>
-      )}
-      {h2h.map(m => (
-        <div key={m.id} className="bg-[#111811] border border-white/10 rounded-xl p-4 mb-2">
-          <p className="text-xs text-gray-500 mb-2">{m.championship?.nome} · Rodada {m.rodada}</p>
-          <div className="flex items-center gap-3">
-            <span className="font-bold text-white flex-1 truncate text-sm">{m.mandante?.nome}</span>
-            <span className="font-display text-2xl text-white flex-shrink-0">
-              {m.resultado?.gols_mandante} × {m.resultado?.gols_visitante}
-            </span>
-            <span className="font-bold text-white flex-1 text-right truncate text-sm">{m.visitante?.nome}</span>
-          </div>
-        </div>
-      ))}
-      {h2h.length > 0 && (
-        <div className="mt-4 bg-[#111811] border border-white/10 rounded-xl p-4 grid grid-cols-3 text-center">
-          <div><p className="font-display text-3xl text-green-400">{w1}</p><p className="text-xs text-gray-500 mt-0.5 truncate">{mNome}</p></div>
-          <div><p className="font-display text-3xl text-gray-400">{d}</p><p className="text-xs text-gray-500 mt-0.5">Empates</p></div>
-          <div><p className="font-display text-3xl text-blue-400">{w2}</p><p className="text-xs text-gray-500 mt-0.5 truncate">{vNome}</p></div>
-        </div>
-      )}
-    </div>
+    <button onClick={onClick} style={{
+      width:size, height:size, background:'var(--bg-card-2)',
+      border:'0.5px solid var(--b-1)', borderRadius:4,
+      color: dim ? 'var(--t-3)' : 'var(--t-2)', fontSize: small ? 13 : 16, cursor:'pointer',
+    }}>{symbol}</button>
   )
 }

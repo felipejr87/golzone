@@ -3,7 +3,6 @@ import { useNavigate, Link, useLocation } from 'react-router-dom'
 
 const NAV = [
   { to:'/admin',              label:'📊 Dashboard'   },
-  { to:'/admin/transmissao',  label:'🎙️ Narração'    },
   { to:'/admin/jogos',        label:'⚽ Jogos'        },
   { to:'/admin/campeonatos',  label:'🏆 Campeonatos' },
   { to:'/admin/times',        label:'👕 Times'        },

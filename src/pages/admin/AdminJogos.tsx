@@ -56,7 +56,7 @@ export default function AdminJogos() {
                 className="text-xs bg-white/8 hover:bg-white/15 text-gray-400 font-bold px-3 py-1.5 rounded-lg transition">
                 📋 Súmula
               </Link>
-              <Link to={`/admin/transmissao/${j.id}`}
+              <Link to={`/admin/jogo/${j.id}`}
                 className="flex items-center gap-1 text-xs bg-red-500/15 text-red-400 border border-red-500/20 px-3 py-1.5 rounded-lg font-medium hover:bg-red-500/25 transition">
                 <span>🎙️</span> Narrar
               </Link>
