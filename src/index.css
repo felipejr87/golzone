@@ -1,74 +1,79 @@
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&display=swap');
-@import './styles/components.css';
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ── TOKENS ─────────────────────────────────── */
+/* ── DESIGN TOKENS ──────────────────────────── */
 :root {
-  /* Backgrounds */
-  --bg-base:    #07080C;
-  --bg-card:    #0F1117;
-  --bg-card-2:  #181B24;
-  --bg-input:   rgba(255,255,255,0.05);
-  --bg-sheet:   #0D0F16;
+  --divino-red:      #E8232A;
+  --divino-red-d:    #C41E24;
+  --divino-red-glow: rgba(232,35,42,.25);
+  --divino-red-bg:   rgba(232,35,42,.08);
+  --bg-base:         #060608;
+  --bg-card:         #0F1117;
+  --bg-card-2:       #161820;
+  --bg-elevated:     #1C1E28;
+  --text-primary:    #FFFFFF;
+  --text-secondary:  #9BA3B8;
+  --text-muted:      #4A5068;
+  --score-elite:     #FFD700;
+  --score-great:     #4ADE80;
+  --score-good:      #60A5FA;
+  --score-avg:       #F59E0B;
+  --score-poor:      #EF4444;
+  --live-green:      #22C55E;
+  --live-pulse:      rgba(34,197,94,.4);
+  --sep:             rgba(255,255,255,.07);
+  --sep-strong:      rgba(255,255,255,.12);
+  --ease:            cubic-bezier(.4,0,.2,1);
+  --spring:          cubic-bezier(.34,1.56,.64,1);
+  --dur:             0.22s;
 
-  /* Marca */
+  /* Legacy tokens — mantidos para compatibilidade com admin */
   --red:        #E8232A;
-  --red-dark:   #A81920;
+  --red-dark:   #C41E24;
   --red-dim:    rgba(232,35,42,0.12);
   --red-border: rgba(232,35,42,0.25);
-
-  /* Texto */
   --t-1: #FFFFFF;
   --t-2: #8B909E;
   --t-3: #3D4255;
-
-  /* Semânticas */
-  --green:  #00C98D;
-  --yellow: #F5B800;
-  --blue:   #4B9FFF;
-
-  /* Bordas */
   --b-1: rgba(255,255,255,0.08);
   --b-2: rgba(255,255,255,0.14);
-
-  /* Tipografia */
   --font-display: 'Bebas Neue', sans-serif;
-  --font-body:    'Outfit', sans-serif;
-
-  /* Raios */
+  --font-body:    'DM Sans', sans-serif;
   --r-sm: 8px;
   --r-md: 12px;
   --r-lg: 16px;
   --r-xl: 22px;
-
-  /* Sombras */
   --shadow-card: 0 1px 3px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.2);
   --shadow-red:  0 4px 24px rgba(232,35,42,0.25);
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-
-html { height: 100%; overscroll-behavior: none; }
-
+/* ── BASE ────────────────────────────────────── */
 body {
-  font-family: var(--font-body);
+  font-family: 'DM Sans', sans-serif;
   background: var(--bg-base);
-  color: var(--t-1);
-  min-height: 100%;
-  font-size: 15px;
-  line-height: 1.5;
+  color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
 }
 
 #root { min-height: 100vh; display: flex; flex-direction: column; }
 
-/* ── TIPOGRAFIA ──────────────────────────────── */
-.display { font-family: var(--font-display); letter-spacing: 0.03em; line-height: 1; }
+/* ── TIPOGRAFIA DISPLAY ───────────────────────── */
+.font-display { font-family: 'Bebas Neue', sans-serif; }
+.display      { font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.03em; line-height: 1; }
 
 /* ── ANIMAÇÕES ───────────────────────────────── */
+@keyframes live-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+  50%       { box-shadow: 0 0 0 4px rgba(34,197,94,0.1); }
+}
+@keyframes dot-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
 @keyframes pulse-dot {
   0%,100% { opacity:1; transform:scale(1); }
   50%      { opacity:0.4; transform:scale(0.7); }
@@ -81,26 +86,113 @@ body {
   from { opacity:0; transform:translateY(100%); }
   to   { opacity:1; transform:translateY(0); }
 }
-.animate-fade-up { animation: fade-up 0.3s ease both; }
-.animate-slide-up { animation: slide-up 0.35s cubic-bezier(0.34,1.56,0.64,1) both; }
+
+.animate-live-pulse  { animation: live-pulse 2s infinite; }
+.animate-dot-pulse   { animation: dot-pulse 1.5s infinite; }
+.animate-fade-up     { animation: fade-up 0.3s ease both; }
+.animate-slide-up    { animation: slide-up 0.35s cubic-bezier(0.34,1.56,0.64,1) both; }
 
 .live-dot {
   display: inline-block;
   width: 7px; height: 7px;
-  background: var(--red);
+  background: var(--divino-red);
   border-radius: 50%;
   animation: pulse-dot 1.4s ease-in-out infinite;
 }
 
+/* ── SAFE AREA ───────────────────────────────── */
+.bottom-nav-safe {
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+.pb-safe { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
+.pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+
 /* ── SCROLLBAR ───────────────────────────────── */
 ::-webkit-scrollbar { width: 3px; height: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--b-2); border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
+.hide-scroll { scrollbar-width: none; }
+.hide-scroll::-webkit-scrollbar { display: none; }
 
-/* ── UTILS ───────────────────────────────────── */
-.hide-scroll { scrollbar-width:none; }
-.hide-scroll::-webkit-scrollbar { display:none; }
+/* ── RATING SLIDER ───────────────────────────── */
+.rating-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 9999px;
+  background: rgba(255,255,255,0.1);
+  outline: none;
+  cursor: pointer;
+}
+.rating-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--slider-color, #FFD700);
+  box-shadow: 0 0 12px var(--slider-color, #FFD700);
+  border: 2px solid #000;
+  cursor: pointer;
+  margin-top: -9px;
+}
+.rating-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+}
+.rating-slider::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--slider-color, #FFD700);
+  border: 2px solid #000;
+  cursor: pointer;
+}
 
-/* ── SAFE AREA ───────────────────────────────── */
-.pb-safe { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
-.pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+/* ── LEGACY CARDS/BUTTONS (admin) ────────────── */
+.card {
+  background: var(--bg-card);
+  border: 0.5px solid var(--b-1);
+  border-radius: var(--r-lg);
+  transition: border-color 0.15s;
+}
+.card:hover { border-color: var(--b-2); }
+.card-live  { border-color: var(--red-border); background: linear-gradient(160deg,#120305 0%,var(--bg-card) 60%); }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-family: var(--font-body); font-weight: 600; font-size: 14px;
+  border-radius: var(--r-md); border: none; cursor: pointer;
+  transition: all 0.15s; white-space: nowrap; text-decoration: none;
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary  { background: var(--red); color: #fff; padding: 12px 20px; box-shadow: var(--shadow-red); }
+.btn-primary:hover { background: #CC1F25; }
+.btn-secondary { background: var(--bg-card-2, #161820); color: var(--t-1); padding: 12px 20px; border: 0.5px solid var(--b-2); }
+.btn-ghost    { background: transparent; color: var(--t-2); padding: 10px 16px; border: 0.5px solid var(--b-1); }
+.btn-ghost:hover { color: var(--t-1); border-color: var(--b-2); }
+.btn-sm  { padding: 8px 14px; font-size: 13px; border-radius: var(--r-sm); }
+.btn-lg  { padding: 16px 28px; font-size: 16px; border-radius: var(--r-lg); }
+.btn-full { width: 100%; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 100px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.badge-live { background: var(--red-dim); color: var(--red); border: 0.5px solid var(--red-border); }
+.badge-soon { background: rgba(75,159,255,0.1); color: #60A5FA; border: 0.5px solid rgba(75,159,255,0.2); }
+.badge-end  { background: rgba(74,80,104,0.2); color: var(--t-3); border: 0.5px solid var(--b-1); }
+
+.input {
+  width: 100%; background: rgba(255,255,255,0.05); border: 0.5px solid var(--b-1);
+  border-radius: var(--r-md); padding: 12px 14px;
+  color: var(--t-1); font-family: var(--font-body); font-size: 14px; outline: none;
+  transition: border-color 0.15s;
+}
+.input::placeholder { color: var(--t-3); }
+.input:focus { border-color: var(--red); }
+
+.rating-circle {
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; border: 1.5px solid; font-weight: 700;
+}
