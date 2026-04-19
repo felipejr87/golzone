@@ -125,6 +125,7 @@ export default function AdminNarracao() {
   const [sheetEdit, setSheetEdit] = useState<Stats>(DEFAULT)
   const [copiado, setCopiado]     = useState(false)
   const [resolucao, setResolucao] = useState<{ jog: Jogador; apelido: string; frase: string; tier: string; pts: number }[]>([])
+  const [escalMoleque, setEscalMoleque] = useState<{ jog: Jogador; apelido: string; isMand: boolean }[]>([])
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const emJogo = fase === 'primeiro' || fase === 'segundo'
@@ -152,6 +153,12 @@ export default function AdminNarracao() {
   function salvarSheet() { if (!jogSheet) return; setStat(jogSheet.id, sheetEdit); setJogSheet(null) }
 
   function iniciar() { setFase('primeiro'); setMinuto(1); addEv('inicio','🟢 Bola rolando! A partida começou!') }
+
+  function gerarEscalacaoMoleque() {
+    const mand  = mandJogs.map(j => ({ jog: j, apelido: apelido(j.posicao), isMand: true  }))
+    const visit = visitJogs.map(j => ({ jog: j, apelido: apelido(j.posicao), isMand: false }))
+    setEscalMoleque([...mand, ...visit])
+  }
 
   function gerarResolucao() {
     const res = todos.map(j => {
@@ -226,14 +233,37 @@ Isso foi Divino TV! Futebol de verdade! 🔥`
                     </span>
                   </div>
                 ))}
-                {jogs.length > 0 && (
-                  <div style={{ marginTop:6, fontSize:11, color:'var(--t-3)', fontStyle:'italic' }}>
-                    Escalação moleque: {jogs.slice(0,3).map(j => `${j.apelido || j.nome}, ${apelido(j.posicao)}`).join(' · ')}...
-                  </div>
-                )}
               </div>
             ))}
           </div>
+
+          {/* Escalação Moleque */}
+          {todos.length > 0 && (
+            <div style={{ marginBottom:20 }}>
+              <button
+                onClick={gerarEscalacaoMoleque}
+                style={{ width:'100%', padding:'14px', background:'var(--red-dim)', border:'0.5px solid var(--red-border)', borderRadius:'var(--r-lg)', color:'var(--red)', fontSize:14, fontWeight:700, cursor:'pointer', marginBottom: escalMoleque.length > 0 ? 12 : 0 }}
+              >
+                🎲 {escalMoleque.length > 0 ? 'Regerar Escalação Moleque' : 'Gerar Escalação Moleque'}
+              </button>
+
+              {escalMoleque.length > 0 && (
+                <div style={{ display:'flex', gap:10 }}>
+                  {([{ label: mandTimes?.nome ?? 'Mandante', isMand: true }, { label: visitTime?.nome ?? 'Visitante', isMand: false }] as const).map(({ label, isMand }) => (
+                    <div key={label} style={{ flex:1, background:'var(--bg-card)', border:'0.5px solid var(--b-1)', borderRadius:'var(--r-lg)', padding:12, minWidth:0 }}>
+                      <div style={{ fontSize:11, fontWeight:700, color:'var(--t-3)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:10 }}>{label}</div>
+                      {escalMoleque.filter(e => e.isMand === isMand).map(e => (
+                        <div key={e.jog.id} style={{ paddingBottom:6, marginBottom:6, borderBottom:'0.5px solid var(--b-1)' }}>
+                          <div style={{ fontSize:12, fontWeight:700, color:'var(--t-1)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{e.jog.apelido || e.jog.nome}</div>
+                          <div style={{ fontSize:11, color:'var(--red)', fontStyle:'italic' }}>{e.apelido}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {todos.length === 0 && (
             <div style={{ background:'rgba(245,184,0,0.08)', border:'0.5px solid rgba(245,184,0,0.2)', borderRadius:'var(--r-lg)', padding:'12px 14px', marginBottom:16, fontSize:13, color:'var(--yellow)' }}>
